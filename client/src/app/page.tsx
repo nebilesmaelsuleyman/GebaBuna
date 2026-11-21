@@ -1,467 +1,184 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import NextLink from 'next/link';
 import {
-  TrendingUp,
-  MapPin,
-  ShieldCheck,
-  Mic,
-  Star,
-  CheckCircle2,
   ArrowRight,
-  Send,
-  Zap,
-  BarChart2,
+  CheckCircle2,
   Leaf,
-  Badge,
+  MapPin,
+  Mic,
+  Send,
+  ShieldCheck,
   ShoppingBag,
+  Sparkles,
+  TrendingUp,
 } from 'lucide-react';
+import { api } from '../services/api';
+import { PublicStats } from '../types';
 
-// ---------------------------------------------------------------------------
-// WebGL Coffee Bean Background
-// ---------------------------------------------------------------------------
-function CoffeeBeanCanvas() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+// Estimated 2025/26 green-coffee prices, ETB/kg. Reference = server/src/constants/coffeePrices.ts.
+// Broker column assumes roadside collectors pay about 78% of the reference price.
+const ecxRows = [
+  { origin: 'Jimma G4 · Mana', process: 'Natural', broker: '560', ecx: '720', buna: '745', advantage: '+33%' },
+  { origin: 'Jimma G3 · Gomma', process: 'Natural', broker: '650', ecx: '830', buna: '860', advantage: '+32%' },
+  { origin: 'Limu G2 · Seka Chekorsa', process: 'Washed', broker: '820', ecx: '1,040', buna: '1,075', advantage: '+31%' },
+  { origin: 'Jimma G1 · Agaro', process: 'Natural', broker: '850', ecx: '1,080', buna: '1,120', advantage: '+32%' },
+  { origin: 'Limu G1 · Kossa', process: 'Washed', broker: '900', ecx: '1,150', buna: '1,195', advantage: '+33%' },
+];
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+const steps = [
+  {
+    n: '01',
+    title: 'Speak the harvest',
+    body: 'A farmer records quantity and asking price in Afaan Oromoo or Amharic. No forms, no literacy barrier.',
+  },
+  {
+    n: '02',
+    title: 'Grade the beans',
+    body: 'A photo returns an ECX-style grade, defect notes, and a fair price range before a buyer ever sees the lot.',
+  },
+  {
+    n: '03',
+    title: 'Hold the floor',
+    body: 'Offers under the protection floor are rejected by the server. Payment is tracked against the price the farmer actually accepted.',
+  },
+];
 
-    function syncSize() {
-      if (!canvas) return;
-      const w = canvas.clientWidth || 1280;
-      const h = canvas.clientHeight || 720;
-      if (canvas.width !== w || canvas.height !== h) {
-        canvas.width = w;
-        canvas.height = h;
-      }
-    }
+export default function HomePage() {
+  const [stats, setStats] = React.useState<PublicStats | null>(null);
 
-    if (typeof ResizeObserver !== 'undefined') {
-      new ResizeObserver(syncSize).observe(canvas);
-    }
-    syncSize();
-
-    const gl = canvas.getContext('webgl') || (canvas.getContext as any)('experimental-webgl');
-    if (!gl) return;
-
-    const vs = `attribute vec2 a_position;
-varying vec2 v_texCoord;
-void main() {
-  v_texCoord = a_position * 0.5 + 0.5;
-  gl_Position = vec4(a_position, 0.0, 1.0);
-}`;
-
-    const fs = `precision highp float;
-uniform vec2 u_resolution;
-uniform float u_time;
-uniform vec2 u_mouse;
-varying vec2 v_texCoord;
-
-float hash(vec2 p) {
-  p = fract(p * vec2(123.34, 456.21));
-  p += dot(p, p + 45.32);
-  return fract(p.x * p.y);
-}
-mat2 rot(float a) {
-  float s = sin(a); float c = cos(a);
-  return mat2(c, -s, s, c);
-}
-float sdCoffeeBean(vec2 p, float scale) {
-  p /= scale;
-  vec2 pEllip = p;
-  pEllip.y *= 1.35;
-  float d = length(pEllip) - 1.0;
-  float crease = abs(p.x - 0.12 * sin(p.y * 3.1415));
-  float creaseDepth = smoothstep(0.12, 0.0, crease) * (1.0 - smoothstep(0.7, 0.95, abs(p.y)));
-  return (d - creaseDepth * 0.18) * scale;
-}
-void main() {
-  vec2 uv = gl_FragCoord.xy / u_resolution.xy;
-  vec2 p = (gl_FragCoord.xy - 0.5 * u_resolution.xy) / u_resolution.y;
-  vec3 col = vec3(0.969, 0.953, 0.925);
-  float bgGlow = length(uv - vec2(0.8, 0.3));
-  col = mix(col, vec3(0.910, 0.855, 0.780), bgGlow * 0.28);
-  vec2 mouseNorm = (u_mouse.xy / u_resolution.xy) - 0.5;
-  vec3 beanDark = vec3(0.38, 0.22, 0.10);
-  vec3 beanMid = vec3(0.55, 0.34, 0.18);
-  vec3 beanHighlight = vec3(0.78, 0.54, 0.28);
-  for (int layer = 0; layer < 2; layer++) {
-    float fLayer = float(layer);
-    float speed = 0.12 + fLayer * 0.08;
-    float layerScale = 2.4 - fLayer * 0.8;
-    vec2 st = p * layerScale;
-    st.y += u_time * speed * 0.3;
-    st.x += sin(u_time * 0.2 + fLayer * 2.0) * 0.1 + mouseNorm.x * (0.05 + fLayer * 0.05);
-    vec2 id = floor(st);
-    vec2 f = fract(st) - 0.5;
-    for (int y = -1; y <= 1; y++) {
-      for (int x = -1; x <= 1; x++) {
-        vec2 g = vec2(float(x), float(y));
-        vec2 cellId = id + g;
-        float rnd = hash(cellId);
-        if (rnd > 0.36) continue;
-        vec2 offset = vec2(hash(cellId + 1.3), hash(cellId + 2.7)) - 0.5;
-        vec2 beanPos = f - g - offset * 0.4;
-        float rotAngle = rnd * 6.28 + u_time * (0.15 * (rnd - 0.5)) + sin(u_time * 0.3 + rnd * 4.0) * 0.4;
-        beanPos = rot(rotAngle) * beanPos;
-        float beanSize = 0.045 + rnd * 0.035;
-        float d = sdCoffeeBean(beanPos, beanSize);
-        float shadow = smoothstep(0.02, 0.0, d - 0.012);
-        col = mix(col, col * 0.92, shadow * 0.35);
-        float alpha = smoothstep(0.004, -0.004, d);
-        if (alpha > 0.0) {
-          vec2 normBean = beanPos / beanSize;
-          float crease = abs(normBean.x - 0.12 * sin(normBean.y * 3.1415));
-          float creaseMask = smoothstep(0.09, 0.02, crease);
-          vec3 bCol = mix(beanMid, beanDark, creaseMask * 0.65);
-          float hl = smoothstep(0.3, 0.8, -normBean.x + normBean.y * 0.5);
-          bCol = mix(bCol, beanHighlight, hl * 0.3);
-          float beanOpacity = (0.10 + fLayer * 0.08) * alpha;
-          col = mix(col, bCol, beanOpacity);
-        }
-      }
-    }
-  }
-  gl_FragColor = vec4(col, 1.0);
-}`;
-
-    function cs(type: number, src: string) {
-      const s = gl.createShader(type)!;
-      gl.shaderSource(s, src);
-      gl.compileShader(s);
-      return s;
-    }
-
-    const prog = gl.createProgram()!;
-    gl.attachShader(prog, cs(gl.VERTEX_SHADER, vs));
-    gl.attachShader(prog, cs(gl.FRAGMENT_SHADER, fs));
-    gl.linkProgram(prog);
-    gl.useProgram(prog);
-
-    const buf = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-
-    const pos = gl.getAttribLocation(prog, 'a_position');
-    gl.enableVertexAttribArray(pos);
-    gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
-
-    const uTime = gl.getUniformLocation(prog, 'u_time');
-    const uRes = gl.getUniformLocation(prog, 'u_resolution');
-    const uMouse = gl.getUniformLocation(prog, 'u_mouse');
-
-    let mouse = { x: canvas.width / 2, y: canvas.height / 2 };
-    const onMouseMove = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width && rect.height) {
-        mouse.x = ((e.clientX - rect.left) / rect.width) * canvas.width;
-        mouse.y = (1 - (e.clientY - rect.top) / rect.height) * canvas.height;
-      }
-    };
-    window.addEventListener('mousemove', onMouseMove);
-
-    let raf: number;
-    function render(t: number) {
-      if (typeof ResizeObserver === 'undefined') syncSize();
-      gl.viewport(0, 0, canvas!.width, canvas!.height);
-      gl.uniform1f(uTime, t * 0.001);
-      gl.uniform2f(uRes, canvas!.width, canvas!.height);
-      gl.uniform2f(uMouse, mouse.x, mouse.y);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      raf = requestAnimationFrame(render);
-    }
-    raf = requestAnimationFrame(render);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('mousemove', onMouseMove);
-    };
+  React.useEffect(() => {
+    api.getPublicStats().then((res) => setStats(res.data)).catch(() => setStats(null));
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="fixed inset-0 w-full h-full pointer-events-none -z-10 opacity-70"
-      style={{ display: 'block' }}
-    />
-  );
-}
-
-// ---------------------------------------------------------------------------
-// ECX Price data (static display — matches Stitch design)
-// ---------------------------------------------------------------------------
-const ecxRows = [
-  { origin: 'Jimma G5 (Agaro)', process: 'Natural Sundried', processColor: 'text-coffee-500', broker: '310 ETB', ecx: '395 ETB', buna: '425 ETB', advantage: '+115 ETB/kg (+37%)' },
-  { origin: 'Sidama G2 (Aleta Wondo)', process: 'Fully Washed', processColor: 'text-forest-600', broker: '390 ETB', ecx: '480 ETB', buna: '520 ETB', advantage: '+130 ETB/kg (+33%)' },
-  { origin: 'Yirgacheffe G1 (Konga)', process: 'Anaerobic Natural', processColor: 'text-gold-700', broker: '460 ETB', ecx: '590 ETB', buna: '670 ETB', advantage: '+210 ETB/kg (+45%)' },
-  { origin: 'Lekempti G4 (Wollega)', process: 'Natural Sundried', processColor: 'text-coffee-500', broker: '305 ETB', ecx: '380 ETB', buna: '415 ETB', advantage: '+110 ETB/kg (+36%)' },
-  { origin: 'Harar Longberry G4', process: 'Heirloom Dry Process', processColor: 'text-coffee-500', broker: '340 ETB', ecx: '435 ETB', buna: '470 ETB', advantage: '+130 ETB/kg (+38%)' },
-];
-
-// ---------------------------------------------------------------------------
-// Feature cards data
-// ---------------------------------------------------------------------------
-const features = [
-  {
-    icon: <Zap className="w-6 h-6" />,
-    color: 'text-gold-600 bg-gold-500/10',
-    tag: 'Computer Vision AI',
-    tagColor: 'text-gold-700',
-    badge: '50K+ Lab Samples',
-    accuracy: '98.4% ECX Grading Accuracy',
-    title: 'AI Coffee Bean Grade & Defect Analyzer',
-    desc: 'Snap a photo of drying cherry beds on Telegram. Neural models trained on ECX physical grading labs detect screen size, moisture, and defect ratios in under 4 seconds.',
-    footer: (
-      <div className="mt-auto p-3 rounded-xl bg-coffee-50 border border-coffee-200 flex items-center justify-between text-sm">
-        <div>
-          <span className="text-xs text-coffee-500 block">Scan Result (Jimma Lot #04)</span>
-          <strong className="text-coffee-900 text-sm">Grade 2 • Screen 16+ (88%)</strong>
-        </div>
-        <span className="text-gold-700 font-bold text-sm">428 ETB/kg Fair Value</span>
-      </div>
-    ),
-  },
-  {
-    icon: <Mic className="w-6 h-6" />,
-    color: 'text-forest-600 bg-forest-500/10',
-    tag: 'Zero Literacy Barrier',
-    tagColor: 'text-forest-700',
-    badge: '',
-    accuracy: 'Afaan Oromoo & Amharic',
-    title: 'Voice Notes in Afaan Oromoo & Amharic',
-    desc: 'No typing needed. Smallholders record voice memos stating volume and washing station location. AI transcribes and executes binding agreements instantly.',
-    footer: (
-      <div className="mt-auto p-3 rounded-xl bg-coffee-50 border border-coffee-200 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-full bg-coffee-900 flex items-center justify-center shrink-0">
-          <span className="text-white text-xs">▶</span>
-        </div>
-        <div className="flex items-end gap-0.5 flex-1 h-5">
-          {[2, 5, 3, 6, 4, 2, 3].map((h, i) => (
-            <div key={i} className={`w-1 rounded-full ${i < 5 ? 'bg-gold-500' : 'bg-gold-300'}`} style={{ height: `${h * 4}px` }} />
-          ))}
-        </div>
-        <span className="text-xs text-forest-600 font-semibold">Oromoo → English Verified</span>
-      </div>
-    ),
-  },
-  {
-    icon: <BarChart2 className="w-6 h-6" />,
-    color: 'text-gold-600 bg-gold-500/10',
-    tag: 'Regulatory Enforcement',
-    tagColor: 'text-gold-700',
-    badge: '',
-    accuracy: 'ECX Floor Integration',
-    title: 'Statutory ECX Price Safeguard',
-    desc: 'Direct link with official ECX rules blocks predatory low-ball offers. Any bid below regulatory guidelines triggers automated protection safeguards.',
-    footer: (
-      <div className="mt-auto p-3 rounded-xl bg-coffee-50 border border-coffee-200 flex items-center justify-between text-sm">
-        <div className="flex items-center gap-1.5 text-forest-600 font-bold text-xs">
-          <ShieldCheck className="w-4 h-4" />
-          <span>100% Minimum Floor Protection</span>
-        </div>
-        <span className="px-2 py-0.5 rounded bg-forest-100 text-forest-700 font-bold text-xs">CTA COMPLIANT</span>
-      </div>
-    ),
-  },
-  {
-    icon: <Star className="w-6 h-6" />,
-    color: 'text-forest-600 bg-forest-500/10',
-    tag: 'Reputation Protocol',
-    tagColor: 'text-forest-700',
-    badge: '',
-    accuracy: 'On-chain Provenance',
-    title: 'Gabaa Trust Score & Rank',
-    desc: 'Track record for smallholders and washing stations. High ratings for prompt lot delivery and consistent moisture unlock advance harvest financing.',
-    footer: (
-      <div className="mt-auto flex items-center gap-2 flex-wrap">
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-coffee-100 border border-coffee-200 text-xs font-bold text-coffee-900">
-          🏅 Gold Harvester
-        </span>
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-forest-100 text-forest-800 text-xs font-bold">
-          <CheckCircle2 className="w-3 h-3" /> 5★ Prompt Payer
-        </span>
-      </div>
-    ),
-  },
-];
-
-// ---------------------------------------------------------------------------
-// Main Page
-// ---------------------------------------------------------------------------
-export default function HomePage() {
-  return (
-    <div className="min-h-screen">
-      <CoffeeBeanCanvas />
-
-      {/* ── HERO ─────────────────────────────────────────────────── */}
-      <section className="relative w-full overflow-hidden pt-8 pb-14 lg:pb-20">
-        <div className="max-w-[1440px] mx-auto px-4 md:px-10">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-
-            {/* Left */}
-            <div className="lg:col-span-7 flex flex-col gap-5 z-10">
-              {/* Eyebrow pill */}
-              <div className="inline-flex items-center gap-2 self-start px-3.5 py-1.5 rounded-full bg-white/90 backdrop-blur-sm shadow-sm border border-coffee-200/60">
-                <span className="w-2.5 h-2.5 rounded-full bg-forest-500 animate-pulse inline-block" />
-                <span className="text-xs font-semibold text-coffee-800 tracking-wide">
-                  🇪🇹 Jimma • Sidama • Yirgacheffe • Harar • Backed by ECX Data
-                </span>
-              </div>
-
-              {/* Headline */}
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.08] text-coffee-950 max-w-2xl">
-                Fair Prices for Ethiopian Coffee Farmers.{' '}
-                <span className="text-cherry-700">Transparent deals</span> for buyers who pay the floor.
-              </h1>
-
-              {/* Subtitle */}
-              <p className="text-base text-coffee-600 max-w-xl leading-relaxed">
-                Empowering Ethiopian smallholders to bypass middlemen with real-time ECX market prices, instant AI bean grading, and Telegram voice trades in Afaan Oromoo & Amharic.
-              </p>
-
-              {/* CTAs */}
-              <div className="flex flex-wrap items-center gap-3 pt-1">
-                <a
-                  href="https://t.me/BunaFairPriceBot"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-full bg-cherry-600 hover:bg-cherry-500 text-white font-bold text-sm shadow-md transition-all transform hover:-translate-y-0.5"
-                >
-                  <Send className="w-4 h-4" />
-                  <span>Launch Telegram Bot</span>
-                  <ArrowRight className="w-4 h-4" />
-                </a>
-                <NextLink
-                  href="/market"
-                  className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full bg-white/90 backdrop-blur-sm text-coffee-900 font-semibold text-sm border border-coffee-200 hover:border-coffee-400 transition-colors"
-                >
-                  <TrendingUp className="w-4 h-4 text-forest-600" />
-                  <span>View ECX Prices</span>
-                </NextLink>
-              </div>
-
-              {/* Metrics bar */}
-              <div className="grid grid-cols-3 gap-3 pt-3 max-w-xl">
-                {[
-                  { value: '14,200+', label: 'Farmers Enrolled', color: 'text-coffee-900' },
-                  { value: '0% Cut', label: 'Zero Middleman Markup', color: 'text-forest-600' },
-                  { value: 'Daily ECX', label: 'Auction Verified', color: 'text-gold-700' },
-                ].map((m) => (
-                  <div key={m.label} className="flex flex-col p-3 rounded-xl bg-white/80 backdrop-blur-sm shadow-sm border border-coffee-200/50">
-                    <span className={`text-xl font-extrabold ${m.color}`}>{m.value}</span>
-                    <span className="text-[11px] text-coffee-500 mt-0.5">{m.label}</span>
-                  </div>
-                ))}
-              </div>
+    <div>
+      <section className="relative overflow-hidden">
+        <div className="mx-auto grid max-w-[1200px] items-center gap-12 px-4 pb-16 pt-10 md:px-8 lg:grid-cols-12 lg:pb-20 lg:pt-14">
+          <div className="lg:col-span-7">
+            <p className="page-kicker">
+              <span className="h-1.5 w-1.5 rounded-full bg-forest-500" />
+              Jimma · Limu · Agaro · Gomma
+            </p>
+            <h1 className="mt-5 max-w-xl text-4xl font-extrabold leading-[1.05] tracking-tight text-coffee-950 sm:text-5xl lg:text-[3.4rem]">
+              The price on the farm should match the price on the exchange.
+            </h1>
+            <p className="mt-5 max-w-lg text-base leading-relaxed text-coffee-700 sm:text-lg">
+              Buna Fair Price shows smallholders a fair price and floor for their grade, grades their coffee from a photo, and lets them list a lot by voice — in Afaan Oromoo, Amharic, or English.
+            </p>
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              <NextLink
+                href="/login"
+                className="inline-flex items-center gap-2 rounded-full bg-coffee-950 px-6 py-3.5 text-sm font-bold text-cream-50 shadow-lg transition hover:-translate-y-0.5 hover:bg-coffee-800"
+              >
+                Open the live demo
+                <ArrowRight className="h-4 w-4" />
+              </NextLink>
+              <NextLink
+                href="/market"
+                className="inline-flex items-center gap-2 rounded-full border border-coffee-200 bg-white/80 px-6 py-3.5 text-sm font-semibold text-coffee-900 backdrop-blur transition hover:border-coffee-400"
+              >
+                <TrendingUp className="h-4 w-4 text-forest-600" />
+                Today’s price board
+              </NextLink>
             </div>
+            <dl className="mt-10 grid max-w-lg grid-cols-3 gap-3">
+              {[
+                [stats ? stats.farmers.toLocaleString() : '—', 'Registered farmers'],
+                [stats ? `${stats.kgTraded.toLocaleString()} kg` : '—', 'Coffee traded on Buna'],
+                [
+                  stats?.premiumOverReferencePct != null ? `${stats.premiumOverReferencePct > 0 ? '+' : ''}${stats.premiumOverReferencePct}%` : '—',
+                  'Paid vs. reference price',
+                ],
+              ].map(([value, label]) => (
+                <div key={label} className="surface px-3 py-3">
+                  <dt className="text-xl font-extrabold tracking-tight text-coffee-950">{value}</dt>
+                  <dd className="mt-1 text-[11px] leading-snug text-coffee-600">{label}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="mt-2 text-[11px] text-coffee-500">
+              {stats ? `Live from the Buna database · ${stats.settledTrades} settled trades` : 'Live numbers appear when the Buna server is running.'}
+            </p>
+          </div>
 
-            {/* Right — Farmer hero card */}
-            <div className="lg:col-span-5 mt-8 lg:mt-0">
-              <div className="relative w-full rounded-2xl overflow-hidden shadow-2xl bg-coffee-100 aspect-[4/5] sm:aspect-square lg:aspect-[4/5]">
+          <div className="lg:col-span-5">
+            <div className="relative">
+              <div className="overflow-hidden rounded-[28px] border border-coffee-200 bg-coffee-950 shadow-[0_30px_80px_rgba(22,13,9,0.22)]">
                 <img
-                  src="https://images.unsplash.com/photo-1447708961282-4f2c4bfb4b1a?auto=format&fit=crop&w=800&q=80"
-                  alt="Ethiopian coffee farmer harvesting ripe red cherries"
-                  className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
+                  src="https://images.unsplash.com/photo-1447708961282-4f2c4bfb4b1a?auto=format&fit=crop&w=1200&q=80"
+                  alt="Ripe coffee cherries on the branch"
+                  className="h-[420px] w-full object-cover sm:h-[480px]"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-coffee-950/80 via-transparent to-black/20 pointer-events-none" />
-
-                {/* Origin badge */}
-                <div className="absolute top-4 left-4 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/90 backdrop-blur-md shadow-sm">
-                  <MapPin className="w-3.5 h-3.5 text-forest-600" />
-                  <span className="text-xs font-bold text-coffee-900 tracking-wide">Jimma Zone • 1,940m</span>
+                <div className="absolute inset-0 bg-gradient-to-t from-coffee-950 via-coffee-950/10 to-transparent" />
+                <div className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/92 px-3 py-1 text-xs font-bold text-coffee-950 backdrop-blur">
+                  <MapPin className="h-3.5 w-3.5 text-forest-600" />
+                  Mana woreda · 1,940 m
                 </div>
-
-                {/* ECX certified */}
-                <div className="absolute top-4 right-4 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-forest-600 text-white shadow-md text-xs font-bold">
-                  <ShieldCheck className="w-3 h-3" />
-                  ECX Certified Lot
-                </div>
-
-                {/* Bottom trade pill */}
-                <div className="absolute bottom-4 left-4 right-4 p-3.5 rounded-xl bg-white/95 backdrop-blur-md shadow-lg flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-forest-100 flex items-center justify-center shrink-0">
-                      <TrendingUp className="w-5 h-5 text-forest-600" />
+                <div className="absolute bottom-4 left-4 right-4 rounded-2xl border border-white/15 bg-coffee-950/80 p-4 text-cream-50 backdrop-blur-md">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-gold-300">Example lot</p>
+                      <p className="mt-1 text-sm font-semibold">Lemma G. · 1,200 kg Natural G4</p>
                     </div>
-                    <div className="flex flex-col">
-                      <span className="text-xs font-bold text-coffee-900">Farmer Lemma G. accepted</span>
-                      <span className="text-[11px] text-coffee-500">425 ETB/kg • 18 bags cherry</span>
+                    <div className="text-right">
+                      <p className="text-2xl font-extrabold tracking-tight">745</p>
+                      <p className="text-[11px] text-coffee-300">ETB / kg · CBE</p>
                     </div>
                   </div>
-                  <span className="px-2.5 py-1 rounded-full bg-forest-100 text-forest-800 text-xs font-bold">PAID VIA CBE</span>
                 </div>
+              </div>
+              <div className="absolute -left-4 top-16 hidden rounded-2xl border border-coffee-200 bg-white px-4 py-3 shadow-card sm:block">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-coffee-500">Broker offer</p>
+                <p className="mt-1 text-lg font-extrabold text-cherry-700 line-through decoration-cherry-400">560 ETB</p>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── ECX PRICE COMPARISON TABLE ───────────────────────────── */}
-      <section className="w-full py-14 bg-white/80 backdrop-blur-sm" id="ecx-table">
-        <div className="max-w-[1440px] mx-auto px-4 md:px-10">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-7">
-            <div className="max-w-2xl">
-              <div className="flex items-center gap-1.5 text-gold-700 text-xs font-bold uppercase tracking-widest mb-1.5">
-                <BarChart2 className="w-4 h-4" />
-                Transparency Engine
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-coffee-950 tracking-tight">
-                Live ECX vs. Middle Broker vs. Buna Fair Price
+      <section className="border-y border-coffee-200/80 bg-white/70" id="ecx-table">
+        <div className="mx-auto max-w-[1200px] px-4 py-16 md:px-8">
+          <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+            <div className="max-w-xl">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-700">The gap</p>
+              <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-coffee-950">
+                Same lot. Three prices.
               </h2>
-              <p className="text-sm text-coffee-600 mt-1">
-                Real-time parity with central Addis Ababa commodity auction terminals.
+              <p className="mt-2 text-sm leading-relaxed text-coffee-600">
+                Local brokers, the market reference, and a direct Buna bid. Estimated 2025/26 green-coffee prices in ETB per kilogram. The broker column assumes roadside collectors pay about 78% of the reference.
               </p>
             </div>
-            <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-forest-100 border border-forest-200 text-forest-800 text-xs font-bold self-start md:self-auto">
-              <ShieldCheck className="w-4 h-4" />
-              Farmers earn +28% to +38% more cash in hand
-            </div>
+            <p className="inline-flex items-center gap-2 self-start rounded-full bg-forest-50 px-3 py-2 text-xs font-bold text-forest-800">
+              <ShieldCheck className="h-4 w-4" />
+              Farmers keep the spread
+            </p>
           </div>
 
-          {/* Table */}
-          <div className="w-full overflow-hidden rounded-2xl bg-white shadow-sm border border-coffee-200">
-            {/* Table header bar */}
-            <div className="px-5 py-3.5 bg-coffee-50 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-forest-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-forest-600" />
-                </span>
-                <span className="text-xs font-bold uppercase tracking-wider text-coffee-900">ECX Central Terminal Feeds</span>
-                <span className="text-xs text-coffee-400">· Updated 12m ago</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="px-2 py-0.5 rounded bg-white border border-coffee-200 text-xs text-gold-700 font-bold">ETB / kg</span>
-                <span className="px-2 py-0.5 rounded bg-coffee-100 text-xs text-coffee-500">USD / lb</span>
-              </div>
-            </div>
-
+          <div className="surface overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full min-w-[720px] text-left">
                 <thead>
-                  <tr className="bg-coffee-50/60 text-coffee-500 text-xs uppercase tracking-wider">
-                    <th className="py-3 px-5">Coffee Origin & Grade</th>
-                    <th className="py-3 px-5">Process</th>
-                    <th className="py-3 px-5">Middle Broker</th>
-                    <th className="py-3 px-5">Official ECX Floor</th>
-                    <th className="py-3 px-5 bg-gold-500/5 text-gold-700">Buna Verified Direct</th>
-                    <th className="py-3 px-5 text-right">Farmer Advantage</th>
+                  <tr className="border-b border-coffee-100 text-[11px] uppercase tracking-[0.14em] text-coffee-500">
+                    <th className="px-5 py-4 font-semibold">Origin</th>
+                    <th className="px-5 py-4 font-semibold">Process</th>
+                    <th className="px-5 py-4 font-semibold">Broker</th>
+                    <th className="px-5 py-4 font-semibold">Market reference</th>
+                    <th className="bg-gold-50/80 px-5 py-4 font-semibold text-gold-800">Buna direct</th>
+                    <th className="px-5 py-4 text-right font-semibold">Lift</th>
                   </tr>
                 </thead>
-                <tbody className="text-sm text-coffee-900 divide-y divide-coffee-100">
-                  {ecxRows.map((row, i) => (
-                    <tr key={i} className={`hover:bg-coffee-50 transition-colors ${i % 2 === 1 ? 'bg-coffee-50/40' : ''}`}>
-                      <td className="py-3 px-5 font-semibold">{row.origin}</td>
-                      <td className={`py-3 px-5 text-xs font-semibold ${row.processColor}`}>{row.process}</td>
-                      <td className="py-3 px-5 text-red-500 font-mono line-through opacity-70">{row.broker}</td>
-                      <td className="py-3 px-5 font-mono">{row.ecx}</td>
-                      <td className="py-3 px-5 bg-gold-500/5 font-mono text-gold-700 font-bold">{row.buna}</td>
-                      <td className="py-3 px-5 text-right">
-                        <span className="inline-flex px-2.5 py-0.5 rounded-full bg-forest-100 text-forest-800 text-xs font-bold">
-                          {row.advantage}
-                        </span>
+                <tbody className="text-sm text-coffee-900">
+                  {ecxRows.map((row) => (
+                    <tr key={row.origin} className="border-b border-coffee-100 last:border-0">
+                      <td className="px-5 py-4 font-semibold">{row.origin}</td>
+                      <td className="px-5 py-4 text-coffee-600">{row.process}</td>
+                      <td className="px-5 py-4 font-mono text-cherry-700 line-through decoration-cherry-300">{row.broker}</td>
+                      <td className="px-5 py-4 font-mono">{row.ecx}</td>
+                      <td className="bg-gold-50/50 px-5 py-4 font-mono font-bold text-gold-800">{row.buna}</td>
+                      <td className="px-5 py-4 text-right">
+                        <span className="rounded-full bg-forest-50 px-2.5 py-1 text-xs font-bold text-forest-800">{row.advantage}</span>
                       </td>
                     </tr>
                   ))}
@@ -472,312 +189,129 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── 4 KEY INNOVATIONS ────────────────────────────────────── */}
-      <section className="w-full py-16 bg-transparent" id="innovations">
-        <div className="max-w-[1440px] mx-auto px-4 md:px-10">
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <span className="text-xs font-bold uppercase tracking-widest text-forest-600">Pioneering Technology</span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-coffee-950 tracking-tight mt-1">
-              Key Innovations for Fair Trade
-            </h2>
-            <p className="text-sm text-coffee-600 mt-2">
-              Rebuilt commodities trading for Telegram bots, 2G connectivity, and voice memos.
+      <section className="mx-auto max-w-[1200px] px-4 py-16 md:px-8" id="innovations">
+        <div className="mb-10 max-w-xl">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-forest-700">How a lot moves</p>
+          <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-coffee-950">Ninety seconds, from voice to a protected bid.</h2>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {steps.map((step) => (
+            <article key={step.n} className="surface p-6">
+              <span className="font-mono text-xs font-bold text-gold-700">{step.n}</span>
+              <h3 className="mt-3 text-lg font-bold text-coffee-950">{step.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-coffee-600">{step.body}</p>
+            </article>
+          ))}
+        </div>
+
+        <div className="mt-6 grid gap-4 lg:grid-cols-12">
+          <article className="surface flex flex-col justify-between p-6 lg:col-span-7">
+            <div>
+              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-gold-100 text-gold-800">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <h3 className="text-xl font-bold text-coffee-950">Photo grading before the negotiation starts</h3>
+              <p className="mt-2 max-w-md text-sm leading-relaxed text-coffee-600">
+                Screen size, defects, color, and moisture become a grade and a price band. The farmer sees the number before accepting anyone’s offer.
+              </p>
+            </div>
+            <div className="mt-6 flex items-center justify-between rounded-2xl bg-coffee-950 px-4 py-3 text-cream-50">
+              <div>
+                <p className="text-[11px] text-coffee-300">Jimma lot · washed</p>
+                <p className="font-semibold">Grade 2 · screen 16+</p>
+              </div>
+              <p className="text-lg font-extrabold text-gold-300">1,040 ETB/kg</p>
+            </div>
+          </article>
+
+          <article className="overflow-hidden rounded-[24px] border border-coffee-800 bg-coffee-950 text-cream-50 lg:col-span-5">
+            <div className="flex items-center gap-3 border-b border-white/10 px-5 py-4">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gold-400 text-xs font-black text-coffee-950">BF</div>
+              <div>
+                <p className="text-sm font-bold">Buna on Telegram</p>
+                <p className="text-[11px] text-coffee-300">Voice agent · Afaan Oromoo & Amharic</p>
+              </div>
+            </div>
+            <div className="space-y-3 px-5 py-5">
+              <div className="ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-gold-400 px-3 py-2 text-xs font-medium text-coffee-950">
+                Gatiin buna Natural G2 meeqa?
+              </div>
+              <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-white/8 px-3 py-3 text-xs leading-relaxed text-cream-100">
+                <p className="font-semibold text-forest-300">Natural G2 · 895–1,040 ETB/kg</p>
+                <p className="mt-1 text-coffee-300">Qarshii 895 gadi hin gurguratinaa. 🔊 Voice reply sent.</p>
+              </div>
+              <a
+                href="https://t.me/bunajimmabot"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 text-xs font-bold text-gold-300"
+              >
+                <Send className="h-3.5 w-3.5" />
+                @bunajimmabot
+              </a>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section className="border-t border-coffee-200/70 bg-white/60">
+        <div className="mx-auto grid max-w-[1200px] gap-4 px-4 py-16 md:px-8 md:grid-cols-2">
+          <article className="surface p-7">
+            <p className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.16em] text-gold-800">
+              <Leaf className="h-3.5 w-3.5" /> Farmers
+            </p>
+            <h3 className="mt-3 text-2xl font-extrabold tracking-tight text-coffee-950">Sell without handing the margin to a broker.</h3>
+            <ul className="mt-5 space-y-3 text-sm text-coffee-700">
+              {['Voice listing in Afaan Oromoo and Amharic', 'A grade and a price before you accept', 'Bids under the floor are rejected'].map((item) => (
+                <li key={item} className="flex items-start gap-2">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-forest-600" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+            <NextLink href="/login" className="mt-6 inline-flex items-center gap-1.5 text-sm font-bold text-coffee-950">
+              Enter as a farmer <ArrowRight className="h-4 w-4" />
+            </NextLink>
+          </article>
+          <article className="surface p-7">
+            <p className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.16em] text-forest-800">
+              <ShoppingBag className="h-3.5 w-3.5" /> Buyers
+            </p>
+            <h3 className="mt-3 text-2xl font-extrabold tracking-tight text-coffee-950">Origin, grade, and a fairness record on every lot.</h3>
+            <ul className="mt-5 space-y-3 text-sm text-coffee-700">
+              {['Woreda and kebele on the listing', 'Cupping, moisture, and photo grade', 'A public score for paying above the floor'].map((item) => (
+                <li key={item} className="flex items-start gap-2">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-forest-600" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+            <NextLink href="/marketplace" className="mt-6 inline-flex items-center gap-1.5 text-sm font-bold text-coffee-950">
+              Browse open harvests <ArrowRight className="h-4 w-4" />
+            </NextLink>
+          </article>
+        </div>
+      </section>
+
+      <section className="px-4 py-16 md:px-8">
+        <div className="mx-auto flex max-w-[1200px] flex-col items-start justify-between gap-6 overflow-hidden rounded-[28px] bg-coffee-950 px-6 py-10 text-cream-50 sm:px-10 md:flex-row md:items-center">
+          <div className="max-w-xl">
+            <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-gold-300">
+              <Mic className="h-3.5 w-3.5" />
+              Demo the web desk today
+            </p>
+            <h2 className="mt-3 text-3xl font-extrabold tracking-tight">Sign in as Gemechu and sell a lot by voice.</h2>
+            <p className="mt-2 text-sm leading-relaxed text-coffee-300">
+              Or send a voice note to @bunajimmabot on Telegram and hear the fair price back in Afaan Oromoo or Amharic.
             </p>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {features.map((f, i) => (
-              <div key={i} className="flex flex-col p-6 rounded-2xl bg-white/80 backdrop-blur-sm border border-coffee-200 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${f.color}`}>
-                      {f.icon}
-                    </div>
-                    <div>
-                      <span className={`text-[11px] font-bold uppercase tracking-wider ${f.tagColor}`}>{f.tag}</span>
-                      <div className="text-[11px] text-coffee-500 font-semibold mt-0.5">{f.accuracy}</div>
-                    </div>
-                  </div>
-                  {f.badge && (
-                    <span className="px-2 py-0.5 rounded-full bg-forest-100 text-forest-700 text-xs font-bold">{f.badge}</span>
-                  )}
-                </div>
-                <h3 className="text-base font-bold text-coffee-950 mb-2">{f.title}</h3>
-                <p className="text-sm text-coffee-500 mb-4 leading-relaxed">{f.desc}</p>
-                {f.footer}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── TELEGRAM BOT SHOWCASE ────────────────────────────────── */}
-      <section className="w-full py-16 bg-coffee-50/80 backdrop-blur-sm" id="telegram-preview">
-        <div className="max-w-[1440px] mx-auto px-4 md:px-10">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-            {/* Left: Steps */}
-            <div className="lg:col-span-6 flex flex-col gap-5">
-              <div className="inline-flex items-center gap-1.5 self-start px-3 py-1 rounded-full bg-gold-500/15 text-gold-700 text-xs font-bold uppercase tracking-wider">
-                <Send className="w-3.5 h-3.5" />
-                Direct Telegram Protocol
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-coffee-950 tracking-tight">
-                How Farmers Sell in 90 Seconds
-              </h2>
-              <p className="text-sm text-coffee-600">
-                No paperwork or complex portals. Open Telegram, snap a photo, speak in your language, and get paid directly to Telebirr or CBE Birr.
-              </p>
-
-              <div className="flex flex-col gap-3 mt-1">
-                {[
-                  { step: 1, title: 'Snap & Speak', desc: 'Photo & voice memo in Afaan Oromoo or Amharic.', color: 'bg-forest-100 text-forest-700' },
-                  { step: 2, title: 'Instant AI ECX Valuation', desc: 'Computer vision calculates grade and matches export bids.', color: 'bg-gold-100 text-gold-700' },
-                  { step: 3, title: 'Escrow Telebirr & CBE Payout', desc: 'Guaranteed instant settlement upon depot drop-off.', color: 'bg-forest-100 text-forest-700' },
-                ].map((s) => (
-                  <div key={s.step} className="flex items-center gap-3 p-3 rounded-xl bg-white/90 backdrop-blur-sm shadow-sm border border-coffee-100">
-                    <div className={`w-8 h-8 rounded-full ${s.color} flex items-center justify-center font-bold text-sm shrink-0`}>
-                      {s.step}
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-coffee-900">{s.title}</h4>
-                      <p className="text-xs text-coffee-500">{s.desc}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="pt-2">
-                <a
-                  href="https://t.me/BunaFairPriceBot"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-cherry-600 hover:bg-cherry-500 text-white font-bold text-sm shadow-md transition-all"
-                >
-                  <Send className="w-4 h-4" />
-                  Open @BunaFairBot on Telegram
-                </a>
-              </div>
-            </div>
-
-            {/* Right: Chat mockup */}
-            <div className="lg:col-span-6 flex justify-center">
-              <div className="w-full max-w-[390px] rounded-2xl bg-white shadow-xl overflow-hidden border border-coffee-200">
-                {/* Chat header */}
-                <div className="bg-coffee-900 px-4 py-3 flex items-center justify-between text-white">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-gold-500 flex items-center justify-center text-coffee-950 font-bold text-xs">BF</div>
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs font-bold">Buna Fair Price Bot</span>
-                        <ShieldCheck className="w-3 h-3 text-forest-400" />
-                      </div>
-                      <span className="text-[10px] text-coffee-300">automated trade desk</span>
-                    </div>
-                  </div>
-                  <span className="text-coffee-400 text-xs">•••</span>
-                </div>
-
-                {/* Messages */}
-                <div className="p-3.5 flex flex-col gap-3 bg-coffee-50/80">
-                  {/* Outgoing */}
-                  <div className="self-end max-w-[88%] p-2.5 rounded-xl bg-gold-500 text-coffee-950 shadow-sm text-sm">
-                    <div className="w-full h-28 rounded-lg bg-coffee-200 overflow-hidden relative mb-1.5">
-                      <img
-                        className="w-full h-full object-cover"
-                        src="https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=400&q=80"
-                        alt="Coffee cherries on drying bed"
-                      />
-                      <span className="absolute bottom-1 right-2 text-[10px] text-white/90 bg-black/50 px-1 py-0.5 rounded">Bed #3</span>
-                    </div>
-                    <p className="text-xs">Jimma Agaro lot, 20 bags sundried ready. 🎙️ Voice memo attached.</p>
-                  </div>
-
-                  {/* Incoming */}
-                  <div className="self-start max-w-[92%] p-3 rounded-xl bg-white shadow-sm text-coffee-900 flex flex-col gap-2 border border-coffee-100">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-forest-600 font-bold flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> AI Scan: Grade 2 (Specialty)
-                      </span>
-                      <span className="text-gold-700 font-bold">98.4% match</span>
-                    </div>
-                    <div className="text-xs text-coffee-500 flex justify-between border-y border-coffee-100 py-1.5">
-                      <span>Screen 16+ · Moisture 11.2%</span>
-                      <strong className="text-gold-700 font-mono">420 – 435 ETB/kg</strong>
-                    </div>
-                    <button className="w-full py-2 px-3 rounded-lg bg-forest-600 text-white text-xs font-bold flex items-center justify-center gap-1 hover:bg-forest-500 transition-colors">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      Accept Offer at 430 ETB/kg
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── TWO-SIDED BENEFITS ────────────────────────────────────── */}
-      <section className="w-full py-16 bg-transparent">
-        <div className="max-w-[1440px] mx-auto px-4 md:px-10">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* For Farmers */}
-            <div className="p-6 rounded-2xl bg-white/80 backdrop-blur-sm border border-coffee-200 shadow-sm flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gold-500/15 text-gold-800 text-xs font-bold">
-                    <Leaf className="w-3.5 h-3.5" /> For Farmers & Stations
-                  </span>
-                  <span className="text-[11px] text-coffee-400 font-semibold uppercase tracking-wider">PRODUCER PROTOCOL</span>
-                </div>
-                <h3 className="text-lg font-bold text-coffee-950 mb-3">Full ECX Market Rates, Zero Broker Deductions</h3>
-                <ul className="space-y-2.5 text-sm text-coffee-600">
-                  {[
-                    { icon: <ShieldCheck className="w-4 h-4 text-forest-500" />, text: 'Protected floor rates on phone or feature device' },
-                    { icon: <TrendingUp className="w-4 h-4 text-forest-500" />, text: 'Direct Telebirr and CBE Birr instant payouts' },
-                    { icon: <Mic className="w-4 h-4 text-forest-500" />, text: 'Voice memos in native Afaan Oromoo & Amharic' },
-                    { icon: <Badge className="w-4 h-4 text-forest-500" />, text: 'Reputation unlocking seasonal input advances' },
-                  ].map((item, i) => (
-                    <li key={i} className="flex items-center gap-2">{item.icon}{item.text}</li>
-                  ))}
-                </ul>
-              </div>
-              <div className="pt-6">
-                <a href="https://t.me/BunaFairPriceBot" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-gold-700 font-bold hover:underline">
-                  Join as Coffee Producer <ArrowRight className="w-4 h-4" />
-                </a>
-              </div>
-            </div>
-
-            {/* For Exporters */}
-            <div className="p-6 rounded-2xl bg-coffee-50/80 backdrop-blur-sm border border-coffee-200 shadow-sm flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-forest-500/15 text-forest-800 text-xs font-bold">
-                    <ShoppingBag className="w-3.5 h-3.5" /> For Exporters & Roasters
-                  </span>
-                  <span className="text-[11px] text-coffee-400 font-semibold uppercase tracking-wider">INSTITUTIONAL DESK</span>
-                </div>
-                <h3 className="text-lg font-bold text-coffee-950 mb-3">Direct Origin Traceability, Zero Default Risk</h3>
-                <ul className="space-y-2.5 text-sm text-coffee-600">
-                  {[
-                    { icon: <MapPin className="w-4 h-4 text-forest-500" />, text: '100% Kebele & washing bed GPS provenance' },
-                    { icon: <ShieldCheck className="w-4 h-4 text-forest-500" />, text: 'Certified Q-grader SCA scores pre-vetted' },
-                    { icon: <CheckCircle2 className="w-4 h-4 text-forest-500" />, text: 'Bank escrow released only after terminal inspection' },
-                    { icon: <BarChart2 className="w-4 h-4 text-forest-500" />, text: 'Automated EUDR deforestation compliance data' },
-                  ].map((item, i) => (
-                    <li key={i} className="flex items-center gap-2">{item.icon}{item.text}</li>
-                  ))}
-                </ul>
-              </div>
-              <div className="pt-6">
-                <NextLink href="/marketplace" className="inline-flex items-center gap-1.5 text-sm text-forest-700 font-bold hover:underline">
-                  Apply for Exporter Access <ArrowRight className="w-4 h-4" />
-                </NextLink>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── TESTIMONIALS & METRICS ───────────────────────────────── */}
-      <section className="w-full py-14 bg-coffee-50/70 backdrop-blur-sm">
-        <div className="max-w-[1440px] mx-auto px-4 md:px-10">
-          {/* Stats row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10 p-5 rounded-2xl bg-white/90 backdrop-blur-sm border border-coffee-200 text-center sm:text-left">
-            {[
-              { value: '48,000+', label: '60kg Jute Bags Direct Traded', color: 'text-coffee-950' },
-              { value: '118M ETB', label: 'Direct Smallholder Payouts', color: 'text-gold-700' },
-              { value: '0', label: 'Disputed Contracts Since Launch', color: 'text-forest-600' },
-            ].map((s) => (
-              <div key={s.label}>
-                <span className={`text-2xl sm:text-3xl font-extrabold ${s.color}`}>{s.value}</span>
-                <span className="block text-xs text-coffee-500 mt-0.5">{s.label}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Testimonials */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {[
-              {
-                quote: '"With Buna Fair Price on Telegram, I recorded a 20-second voice note in Afaan Oromoo. That evening I received 430 ETB/kg directly in my CBE Birr—34% more than local brokers offered."',
-                name: 'Lemma Desta',
-                role: 'Coffee Producer • Jimma Zone',
-                avatar: 'LD',
-                avatarBg: 'bg-gold-500',
-              },
-              {
-                quote: '"Buna Fair gives us transparent cupping logs, exact GPS plots, and escrow clarity. We now source 40% of our single-origin Sidama directly through this platform."',
-                name: 'Bethlehem K.',
-                role: 'Director, Abyssinia Specialty Origin Labs',
-                avatar: 'BK',
-                avatarBg: 'bg-forest-600',
-              },
-            ].map((t) => (
-              <div key={t.name} className="p-6 rounded-2xl bg-white/95 backdrop-blur-sm border border-coffee-200 shadow-sm flex flex-col justify-between">
-                <p className="text-sm text-coffee-800 italic leading-relaxed">{t.quote}</p>
-                <div className="flex items-center gap-3 mt-5 pt-4 border-t border-coffee-100">
-                  <div className={`w-10 h-10 rounded-full ${t.avatarBg} flex items-center justify-center text-white font-bold text-xs shrink-0`}>
-                    {t.avatar}
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-coffee-900 block">{t.name}</span>
-                    <span className="text-[11px] text-coffee-500">{t.role}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── FINAL CTA BANNER ─────────────────────────────────────── */}
-      <section className="w-full py-16 relative overflow-hidden bg-coffee-950 text-cream-100">
-        {/* Subtle radial glows */}
-        <div
-          className="absolute inset-0 opacity-10 pointer-events-none"
-          style={{
-            backgroundImage:
-              'radial-gradient(circle at 20% 50%, #c42e1e 0%, transparent 50%), radial-gradient(circle at 80% 20%, #226e46 0%, transparent 40%)',
-          }}
-        />
-        <div className="max-w-[1440px] mx-auto px-4 md:px-10 text-center flex flex-col items-center gap-5 relative z-10">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-gold-300">
-            Ethiopian coffee deserves a sovereign price
-          </span>
-          <h2 className="max-w-2xl text-2xl font-extrabold leading-tight tracking-tight text-cream-50 sm:text-4xl">
-            Ready to Trade Coffee at Fair Ethiopian Market Value?
-          </h2>
-          <p className="text-sm max-w-lg text-coffee-300">
-            Join over 14,000 smallholders and certified exporters on the official transparent exchange network.
-          </p>
-
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
-            <a
-              href="https://t.me/BunaFairPriceBot"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-full bg-cherry-600 px-6 py-3 text-sm font-bold text-white shadow-lg transition-colors hover:bg-cherry-500"
-            >
-              <Send className="w-4 h-4" />
-              Launch Telegram Bot
-            </a>
-            <NextLink
-              href="/marketplace"
-              className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-6 py-3 text-sm font-semibold text-cream-50 transition-colors hover:bg-white/15"
-            >
-              <ShieldCheck className="w-4 h-4" />
-              Register as Verified Buyer
-            </NextLink>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-center gap-5 pt-4 text-xs text-coffee-400">
-            {['Telebirr & CBE Escrow', 'ECX floor protection', 'Coffee & Tea Authority'].map((badge) => (
-              <span key={badge} className="flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5 text-forest-300" /> {badge}
-              </span>
-            ))}
-          </div>
+          <NextLink
+            href="/login"
+            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-cream-50 px-6 py-3.5 text-sm font-bold text-coffee-950"
+          >
+            Start the demo
+            <ArrowRight className="h-4 w-4" />
+          </NextLink>
         </div>
       </section>
     </div>

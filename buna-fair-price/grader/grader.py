@@ -1,7 +1,7 @@
 """
 ╔══════════════════════════════════════════════════════════════╗
 ║          BUNA FAIR PRICE — AI Coffee Bean Grader             ║
-║          Model: gemini-3.8-flash (multimodal vision)         ║
+║          Model: gemini-3.7-flash (multimodal vision)         ║
 ║          ECX Grade Standard: Washed G1-G5 / Natural G1-G9    ║
 ╚══════════════════════════════════════════════════════════════╝
 
@@ -56,7 +56,7 @@ def env_value(*names: str) -> str:
 GEMINI_API_KEY = env_value("GEMINI_API_KEY", "GOOGLE_API_KEY")
 OPENROUTER_API_KEY = env_value("OPENROUTER_API_KEY", "OpenRouter_API_KEY")
 OPENROUTER_MODEL = env_value("OPENROUTER_MODEL") or "openrouter/free"
-MODEL = "gemini-3.8-flash"
+MODEL = env_value("GEMINI_MODEL") or "gemini-3.7-flash"
 ECX_COFFEE_GRADES = ["Washed G1", "Washed G2", "Washed G3", "Washed G4", "Washed G5", "Natural G1", "Natural G2", "Natural G3", "Natural G4", "Natural G5", "Specialty Q1", "Specialty Q2", "Under Grade"]
 GEMINI_MAX_REQUESTS_PER_MINUTE = max(1, int(env_value("GEMINI_MAX_REQUESTS_PER_MINUTE") or "5"))
 _gemini_request_lock = threading.Lock()
@@ -83,18 +83,24 @@ def wait_for_gemini_slot() -> None:
         time.sleep(max(0.1, delay))
 
 # ── ECX Price Reference Table (ETB/kg) ───────────────────────────────────────
-# Source: ECX reference prices, Nov 2026 — update daily in production
+# Estimated 2025/26 Jimma green-coffee prices, ETB per kg (min = platform floor,
+# max = ceiling). Derived from ECTA minimum export floors (Jimma/Limu G1 about
+# US$8.1-8.3/kg), Jimma FOB ranges (G4 natural US$2.50-3.20/lb) and farm-gate
+# cherry prices of 120-185 ETB/kg, at 1 USD ≈ 155 ETB. Keep in sync with
+# server/src/constants/coffeePrices.ts.
 ECX_PRICES: dict[str, dict] = {
-    "Washed G1":   {"min": 90,  "max": 105, "description": "Specialty export grade"},
-    "Washed G2":   {"min": 78,  "max": 89,  "description": "High quality export"},
-    "Washed G3":   {"min": 65,  "max": 77,  "description": "Standard export"},
-    "Washed G4":   {"min": 52,  "max": 64,  "description": "Commercial grade"},
-    "Washed G5":   {"min": 38,  "max": 51,  "description": "Low commercial"},
-    "Natural G1":  {"min": 85,  "max": 100, "description": "Premium natural"},
-    "Natural G2":  {"min": 72,  "max": 84,  "description": "Good natural"},
-    "Natural G3":  {"min": 60,  "max": 71,  "description": "Standard natural"},
-    "Natural G4":  {"min": 48,  "max": 59,  "description": "Commercial natural"},
-    "Natural G5":   {"min": 36,  "max": 47,  "description": "Low natural"},
+    "Specialty Q1": {"min": 1170, "max": 1380, "description": "Specialty, cup score 85+"},
+    "Specialty Q2": {"min": 1115, "max": 1310, "description": "Specialty, cup score 80-84"},
+    "Washed G1":   {"min": 1070, "max": 1250, "description": "Top washed export grade"},
+    "Washed G2":   {"min": 965,  "max": 1130, "description": "High quality export"},
+    "Washed G3":   {"min": 835,  "max": 980,  "description": "Standard export"},
+    "Washed G4":   {"min": 735,  "max": 860,  "description": "Commercial grade"},
+    "Washed G5":   {"min": 630,  "max": 740,  "description": "Low commercial"},
+    "Natural G1":  {"min": 1005, "max": 1170, "description": "Premium natural"},
+    "Natural G2":  {"min": 895,  "max": 1040, "description": "Good natural"},
+    "Natural G3":  {"min": 770,  "max": 900,  "description": "Standard natural"},
+    "Natural G4":  {"min": 670,  "max": 790,  "description": "Commercial natural"},
+    "Natural G5":  {"min": 575,  "max": 680,  "description": "Low natural"},
 }
 
 # ── Fallback result when API is unavailable ───────────────────────────────────
@@ -106,8 +112,8 @@ FALLBACK_RESULT = {
     "color_quality": "fair",
     "uniformity_score": 5,
     "moisture_level": "unknown",
-    "estimated_price_min_etb": 48,
-    "estimated_price_max_etb": 59,
+    "estimated_price_min_etb": 670,
+    "estimated_price_max_etb": 790,
     "confidence": "low",
     "is_fallback": True,
     "summary_english": "⚠️ AI grading unavailable — showing median grade. Please try again.",

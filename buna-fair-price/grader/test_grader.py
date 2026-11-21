@@ -66,8 +66,8 @@ print("\n2. ECX Price Enrichment")
 r.enrich_with_prices()
 test("Price min is set",   r.estimated_price_min_etb is not None)
 test("Price max is set",   r.estimated_price_max_etb is not None)
-test("Washed G2 min >= 70", (r.estimated_price_min_etb or 0) >= 70)
-test("Washed G2 max <= 100", (r.estimated_price_max_etb or 999) <= 100)
+test("Washed G2 min >= 900", (r.estimated_price_min_etb or 0) >= 900)
+test("Washed G2 max <= 1200", (r.estimated_price_max_etb or 9999) <= 1200)
 
 # ── Test 3: JSON serialization ────────────────────────────────────────────────
 print("\n3. JSON Serialization")

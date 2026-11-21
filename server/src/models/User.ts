@@ -13,6 +13,9 @@ export interface IUser extends Document {
   preferredLanguage: PreferredLanguage;
   avatar?: string;
   isActive: boolean;
+  removedAt?: Date;
+  removedReason?: string;
+  removedBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -60,6 +63,9 @@ const UserSchema = new Schema<IUser>(
       type: Boolean,
       default: true,
     },
+    removedAt: Date,
+    removedReason: { type: String, default: '' },
+    removedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   },
   {
     timestamps: true,

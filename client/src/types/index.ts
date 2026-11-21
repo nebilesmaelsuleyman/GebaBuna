@@ -5,7 +5,9 @@ export const ECX_COFFEE_GRADES = [
   'Natural G1', 'Natural G2', 'Natural G3', 'Natural G4', 'Natural G5',
   'Specialty Q1', 'Specialty Q2', 'Under Grade',
 ] as const;
-export type CoffeeGrade = (typeof ECX_COFFEE_GRADES)[number];
+// Grades stored by the API (MarketPrice/Listing) use the short form, e.g. "Grade 1".
+export const MARKET_GRADES = ['Specialty', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5'] as const;
+export type CoffeeGrade = (typeof ECX_COFFEE_GRADES)[number] | (typeof MARKET_GRADES)[number];
 export type ProcessingType = 'washed' | 'natural' | 'honey' | 'anaerobic';
 export type VerificationStatus = 'pending' | 'verified' | 'rejected';
 export type OfferStatus = 'pending' | 'accepted' | 'rejected' | 'countered' | 'cancelled';
@@ -199,11 +201,28 @@ export interface Trade {
   createdAt: string;
 }
 
+export interface PublicStats {
+  farmers: number;
+  buyers: number;
+  openListings: number;
+  settledTrades: number;
+  kgTraded: number;
+  etbPaid: number;
+  premiumOverReferencePct: number | null;
+  averageBuyerFairness: number | null;
+}
+
 export interface AdminStats {
   totalFarmers: number;
   totalBuyers: number;
+  verifiedBuyers?: number;
+  removedUsers?: number;
   pendingVerifications: number;
   totalListings: number;
+  openListings?: number;
+  openKgListed?: number;
+  openOffers?: number;
+  tradesInProgress?: number;
   completedTrades: number;
   totalKgTraded: number;
   totalETBValue: number;
@@ -211,4 +230,68 @@ export interface AdminStats {
   avgMarketPrice: number;
   fairnessRatioOverall: number;
   flaggedBuyersCount: number;
+}
+
+export interface AdminUserRow {
+  id: string;
+  fullName: string;
+  phone?: string;
+  email?: string;
+  isActive: boolean;
+  removedAt?: string;
+  removedReason?: string;
+  joinedAt: string;
+  settledTrades: number;
+  kgTraded: number;
+  etbTraded: number;
+  premiumOverReferencePct: number | null;
+  tradesInProgress: number;
+  openOffers: number;
+  // Farmers
+  woreda?: string;
+  kebele?: string;
+  cooperative?: string;
+  farmSizeHectares?: number;
+  qualityScore?: number;
+  qualityRank?: number;
+  openListings?: number;
+  openKgListed?: number;
+  // Buyers
+  buyerProfileId?: string;
+  companyName?: string;
+  businessType?: string;
+  tradeLicenseNumber?: string;
+  tinNumber?: string;
+  verificationStatus?: string;
+  fairnessScore?: number;
+  averageRatingFromFarmers?: number;
+}
+
+export interface AdminTradeRow {
+  id: string;
+  status: string;
+  farmerName: string;
+  buyerName: string;
+  coffeeType?: string;
+  processing?: string;
+  grade?: string;
+  woreda?: string;
+  quantityKg: number;
+  pricePerKg: number;
+  referencePricePerKg: number;
+  totalETB: number;
+  paymentMethod?: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface AdminAuditEntry {
+  _id: string;
+  admin?: { fullName: string };
+  action: 'user_removed' | 'user_restored' | 'buyer_approved' | 'buyer_rejected' | 'buyer_suspended';
+  targetRole: string;
+  targetName: string;
+  reason: string;
+  details?: Record<string, unknown>;
+  createdAt: string;
 }

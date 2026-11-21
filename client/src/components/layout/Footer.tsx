@@ -6,7 +6,7 @@ import { Coffee, ShieldCheck, Phone, Send, TrendingUp } from 'lucide-react';
 
 export const Footer: React.FC = () => {
   const marketLinks = [
-    { href: '/market', label: 'Live ECX Price Strip' },
+    { href: '/market', label: 'Price Board (2025/26 estimates)' },
     { href: '/leaderboard', label: 'Washing Station Scores' },
     { href: '/marketplace', label: 'Direct Grade Allocations' },
   ];
@@ -67,7 +67,7 @@ export const Footer: React.FC = () => {
               Reach farmers where they are
             </h4>
             <a
-              href="https://t.me/BunaFairPriceBot"
+              href="https://t.me/bunajimmabot"
               target="_blank"
               rel="noreferrer"
               className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-3 transition-colors hover:bg-white/10"
@@ -75,7 +75,7 @@ export const Footer: React.FC = () => {
               <Send className="h-4 w-4 shrink-0 text-gold-300" />
               <div>
                 <div className="text-sm font-semibold text-cream-50">Telegram Bot</div>
-                <div className="text-[11px] text-coffee-300">@BunaFairPriceBot</div>
+                <div className="text-[11px] text-coffee-300">@bunajimmabot</div>
               </div>
             </a>
             <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-3">

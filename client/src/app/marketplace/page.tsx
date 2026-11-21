@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
 import { Listing, Offer } from '../../types';
+import { floorFor, formatGrade } from '../../utils/coffeePrices';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -33,11 +34,12 @@ export default function MarketplacePage() {
 
   // Modal State
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
-  const [offerPrice, setOfferPrice] = useState<number>(420);
+  const [offerPrice, setOfferPrice] = useState<number>(1100);
   const [offerQuantity, setOfferQuantity] = useState<number>(1000);
   const [paymentTerms, setPaymentTerms] = useState<string>('Escrow via Commercial Bank of Ethiopia (CBE)');
   const [deliveryLocation, setDeliveryLocation] = useState<string>('Jimma Central Coffee Warehouse');
   const [offerSuccessMsg, setOfferSuccessMsg] = useState<string | null>(null);
+  const [offerError, setOfferError] = useState<string | null>(null);
   const [offerSubmitting, setOfferSubmitting] = useState<boolean>(false);
 
   useEffect(() => {
@@ -69,6 +71,7 @@ export default function MarketplacePage() {
     setOfferPrice(lot.askingPricePerKg);
     setOfferQuantity(lot.quantityKg);
     setOfferSuccessMsg(null);
+    setOfferError(null);
   };
 
   const handleSubmitOffer = async (e: React.FormEvent) => {
@@ -76,6 +79,7 @@ export default function MarketplacePage() {
     if (!selectedListing) return;
 
     setOfferSubmitting(true);
+    setOfferError(null);
     try {
       const offerData = {
         listingId: selectedListing._id,
@@ -92,19 +96,18 @@ export default function MarketplacePage() {
         setOfferSuccessMsg(null);
       }, 2500);
     } catch (err: any) {
-      // Even if network mock fails, give clear feedback for demo
-      setOfferSuccessMsg('✓ Offer submitted successfully to farmer! Notification sent.');
-      setTimeout(() => {
-        setSelectedListing(null);
-        setOfferSuccessMsg(null);
-      }, 2500);
+      setOfferError(
+        err?.status === 401 || err?.status === 403
+          ? 'Sign in as a verified buyer to send offers.'
+          : err?.message || 'The offer could not be sent.'
+      );
     } finally {
       setOfferSubmitting(false);
     }
   };
 
   const isOfferFair = selectedListing
-    ? offerPrice >= (selectedListing.marketReferencePrice - 20)
+    ? offerPrice >= floorFor(selectedListing.marketReferencePrice)
     : true;
 
   return (
@@ -120,7 +123,7 @@ export default function MarketplacePage() {
             Jimma Certified Coffee Harvests
           </h1>
           <p className="text-sm text-coffee-600 mt-1">
-            Browse verified harvest lots from Jimma farmers with ECX floor price protection.
+            Browse verified harvest lots from Jimma farmers with price-floor protection.
           </p>
         </div>
       </div>
@@ -173,10 +176,10 @@ export default function MarketplacePage() {
               className="w-full bg-coffee-50/50 border border-coffee-200 rounded-xl px-3 py-2 text-xs text-coffee-900 focus:outline-none focus:ring-2 focus:ring-gold-500 font-medium"
             >
               <option value="all">All Grades</option>
-              <option value="Specialty">Specialty (Q1 85+ pts)</option>
-              <option value="Grade 1">Grade 1 Export</option>
-              <option value="Grade 2">Grade 2 Commercial</option>
-              <option value="Grade 3">Grade 3</option>
+              <option value="Specialty">Specialty (cup 85+)</option>
+              <option value="Grade 1">G1</option>
+              <option value="Grade 2">G2</option>
+              <option value="Grade 3">G3</option><option value="Grade 4">G4</option><option value="Grade 5">G5</option>
             </select>
           </div>
 
@@ -234,10 +237,7 @@ export default function MarketplacePage() {
                   />
                   <div className="absolute top-3 left-3 flex gap-1.5 flex-wrap">
                     <span className="px-2.5 py-0.5 rounded-full bg-coffee-950/80 backdrop-blur-md text-white text-[10px] font-bold">
-                      {lot.grade}
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded-full bg-forest-800/90 backdrop-blur-md text-white text-[10px] font-bold capitalize">
-                      {lot.processing}
+                      {formatGrade(lot.processing, lot.grade)}
                     </span>
                   </div>
 
@@ -313,7 +313,7 @@ export default function MarketplacePage() {
                       <span className="text-xs font-semibold text-coffee-600">ETB/kg</span>
                     </div>
                     <span className="text-[10px] text-coffee-500">
-                      ECX Ref: {lot.marketReferencePrice} ETB
+                      Reference: {lot.marketReferencePrice} ETB
                     </span>
                   </div>
 
@@ -361,6 +361,9 @@ export default function MarketplacePage() {
                 </div>
               ) : (
                 <form onSubmit={handleSubmitOffer} className="space-y-4 text-xs">
+                  {offerError && (
+                    <div className="rounded-xl border border-cherry-200 bg-cherry-50 px-3 py-2 text-sm text-cherry-800">{offerError}</div>
+                  )}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="font-semibold text-coffee-900 block mb-1">
@@ -368,14 +371,14 @@ export default function MarketplacePage() {
                       </label>
                       <input
                         type="number"
-                        min="250"
+                        min="500"
                         value={offerPrice}
                         onChange={(e) => setOfferPrice(Number(e.target.value))}
                         className="w-full bg-coffee-50/50 border border-coffee-300 rounded-xl px-3.5 py-2.5 text-sm font-bold text-coffee-950 focus:outline-none focus:ring-2 focus:ring-gold-500"
                         required
                       />
                       <span className="text-[10px] text-coffee-500 mt-1 block">
-                        ECX Floor: {selectedListing.marketReferencePrice - 20} ETB/kg
+                        Protection floor: {floorFor(selectedListing.marketReferencePrice)} ETB/kg
                       </span>
                     </div>
 
@@ -417,11 +420,11 @@ export default function MarketplacePage() {
                       </div>
                       <div className="text-[11px] opacity-90 mt-0.5">
                         {isOfferFair
-                          ? `This offer (${offerPrice} ETB/kg) meets or exceeds the ECX minimum benchmark (${
-                              selectedListing.marketReferencePrice - 20
+                          ? `This offer (${offerPrice} ETB/kg) meets or exceeds the protection floor (${
+                              floorFor(selectedListing.marketReferencePrice)
                             } ETB/kg) and protects your buyer Fairness Score.`
                           : `Offering below ${
-                              selectedListing.marketReferencePrice - 20
+                              floorFor(selectedListing.marketReferencePrice)
                             } ETB/kg violates regional smallholder floor protections and will negatively impact your verified buyer rating.`}
                       </div>
                     </div>

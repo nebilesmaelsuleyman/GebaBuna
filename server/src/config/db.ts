@@ -11,10 +11,12 @@ export const connectDB = async (): Promise<void> => {
   for (const uri of urisToTry) {
     try {
       await mongoose.connect(uri);
-      console.log(`☕ [MongoDB] Successfully connected to: ${uri}`);
+      const connected = mongoose.connection;
+      console.log(`☕ [MongoDB] Connected to ${connected.host}/${connected.name}`);
       return;
     } catch (err: any) {
-      console.warn(`⚠️ [MongoDB] Failed connecting to ${uri}: ${err.message}`);
+      const label = uri.replace(/\/\/([^:]+):([^@]+)@/, '//$1:***@');
+      console.warn(`⚠️ [MongoDB] Failed connecting to ${label}: ${err.message}`);
     }
   }
 

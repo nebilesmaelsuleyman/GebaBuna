@@ -94,6 +94,10 @@ OPENROUTER_MODEL=openrouter/free
 python run_bot.py
 ```
 
+This is the only supported start command (from this folder, or from the repo root, where `run_bot.py` forwards here). Running `bot/main.py` directly just prints this instruction.
+
+The bot also needs `ADDIS_API_KEY` for voice notes and `BUNA_API_URL` (default `http://localhost:5000/api/v1`) for creating listings from voice.
+
 ---
 
 ## 🤖 Available Bot Commands

@@ -5,6 +5,7 @@ import NextLink from 'next/link';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { api } from '../../services/api';
+import { formatGrade } from '../../utils/coffeePrices';
 import { Offer, Trade } from '../../types';
 import {
   ShieldCheck,
@@ -67,6 +68,7 @@ export default function BuyerPortalPage() {
   const [activeOffers, setActiveOffers] = useState<BuyerOfferView[]>([]);
   const [completedTrades, setCompletedTrades] = useState<BuyerTradeView[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fairnessScore, setFairnessScore] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -77,6 +79,7 @@ export default function BuyerPortalPage() {
           api.getOutgoingOffers(),
           api.getTrades(),
         ]);
+        api.getMe().then((me: any) => setFairnessScore(me.profile?.fairnessScore ?? null)).catch(() => setFairnessScore(null));
 
         if (offersRes.success && offersRes.offers) {
           const viewOffers: BuyerOfferView[] = (offersRes.offers as Offer[]).map((o) => {
@@ -113,7 +116,7 @@ export default function BuyerPortalPage() {
               tradeRef: t.tradeReference,
               farmerName: farmer?.fullName || 'Verified Farmer',
               woreda: listing?.location?.woreda || 'Jimma',
-              coffeeGrade: listing?.grade || 'Grade 1',
+              coffeeGrade: formatGrade(listing?.processing, listing?.grade),
               quantityKg: t.agreedQuantityKg,
               pricePerKg: t.agreedPricePerKg,
               floorPrice: t.marketReferencePrice,
@@ -140,6 +143,8 @@ export default function BuyerPortalPage() {
     loadData();
   }, []);
 
+  const tradesAtOrAboveFloor = completedTrades.filter((trade) => trade.pricePerKg >= trade.floorPrice).length;
+  const floorSharePct = completedTrades.length ? Math.round((tradesAtOrAboveFloor / completedTrades.length) * 100) : null;
   const settledTrades = completedTrades.filter((trade) => ['paid', 'completed'].includes(trade.status));
   const procurementByMonth = Array.from({ length: 6 }, (_, index) => {
     const date = new Date(); date.setDate(1); date.setMonth(date.getMonth() - (5 - index));
@@ -202,9 +207,9 @@ export default function BuyerPortalPage() {
             <span>Browse Open Harvests</span>
           </NextLink></>}
         stats={[
-          { label: 'Fairness Score', value: '96%', detail: 'Rank #1 Ethical Buyer', tone: 'green' },
+          { label: 'Fairness Score', value: fairnessScore != null ? `${Math.round(fairnessScore)}%` : '—', detail: 'From your trades and farmer reviews', tone: 'green' },
           { label: 'Total Volume Bought', value: <>{completedTrades.reduce((sum, t) => sum + (Number(t.quantityKg) || 0), 0).toLocaleString()} <small className="text-sm font-semibold">kg</small></>, detail: 'Smallholder lots', tone: 'light' },
-          { label: 'Trades Above ECX Floor', value: '100%', detail: 'Zero low-ball bids', tone: 'gold' },
+          { label: 'Trades At or Above Floor', value: floorSharePct != null ? `${floorSharePct}%` : '—', detail: `${tradesAtOrAboveFloor} of ${completedTrades.length} trades`, tone: 'gold' },
           { label: 'Active Offers', value: activeOffers.length, detail: 'Pending farmer response', tone: 'green' },
         ]}
       />

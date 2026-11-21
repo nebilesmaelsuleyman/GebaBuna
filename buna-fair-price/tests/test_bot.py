@@ -26,7 +26,8 @@ from bot.formatter import (
     build_result_keyboard,
     build_language_keyboard,
 )
-from bot.voice_service import VoiceService
+from bot.voice_service import VoiceService, words_to_numbers
+from bot.listing_service import ListingDraft, ListingService, draft_from_intent
 from bot.main import UserPreferenceStore, create_application
 from grader import GradeResult, ECX_PRICES, CoffeeGrader
 
@@ -84,8 +85,8 @@ class TestBunaJimmaFormatter(unittest.TestCase):
                 "ጥሩ የታጠበ የጅማ ቡና ደረጃ 2 ጥራት አለው።",
                 "የተሰበሩ ፍሬዎችን በመለየት ተጨማሪ ዋጋ ማግኘት ይቻላል።",
             ],
-            estimated_price_min_etb=78.0,
-            estimated_price_max_etb=89.0,
+            estimated_price_min_etb=965.0,
+            estimated_price_max_etb=1130.0,
         )
 
     def test_format_grade_badge(self):
@@ -102,23 +103,23 @@ class TestBunaJimmaFormatter(unittest.TestCase):
     def test_format_grade_result_oromo(self):
         formatted = format_grade_result(self.sample_result, lang="om")
         self.assertIn("Washed G2", formatted)
-        self.assertIn("78", formatted)
-        self.assertIn("89", formatted)
+        self.assertIn("965", formatted)
+        self.assertIn("1130", formatted)
         self.assertIn("ETB/kg", formatted)
         self.assertIn("Buna dhiqamaa qulqullinaan gogsan", formatted)
 
     def test_format_grade_result_amharic(self):
         formatted = format_grade_result(self.sample_result, lang="am")
         self.assertIn("Washed G2", formatted)
-        self.assertIn("78", formatted)
-        self.assertIn("89", formatted)
+        self.assertIn("965", formatted)
+        self.assertIn("1130", formatted)
         self.assertIn("ብር", formatted)
         self.assertIn("ጥሩ የታጠበ የጅማ ቡና", formatted)
 
     def test_format_grade_result_english(self):
         formatted = format_grade_result(self.sample_result, lang="en")
         self.assertIn("Washed G2", formatted)
-        self.assertIn("78", formatted)
+        self.assertIn("965", formatted)
         self.assertIn("High quality Jimma washed beans", formatted)
 
     def test_format_ecx_table(self):
@@ -147,11 +148,61 @@ class TestVoiceService(unittest.IsolatedAsyncioTestCase):
         ack_en = await service.handle_voice_message(user_lang="en")
         self.assertIn("Voice message received", ack_en)
 
-    async def test_transcribe_placeholder(self):
-        service = VoiceService()
+    async def test_transcribe_without_keys(self):
+        service = VoiceService(addis_api_key="", gemini_api_key="")
         res = await service.transcribe(b"fake audio bytes", lang_hint="om")
         self.assertEqual(res.detected_language, "om")
         self.assertFalse(res.is_supported)
+
+    def test_number_words(self):
+        self.assertEqual(words_to_numbers("kiiloo dhibba shan qarshii kuma tokko"), [500, 1000])
+        self.assertEqual(words_to_numbers("dhibba lamaa fi shantama"), [250])
+        self.assertEqual(words_to_numbers("አንድ ሺህ አምስት መቶ"), [1500])
+        self.assertEqual(words_to_numbers("500 kg 1,050 birr"), [500, 1050])
+
+    async def test_price_answer(self):
+        service = VoiceService(addis_api_key="", gemini_api_key="")
+        answer = await service.answer("Gatiin buna Natural G2 meeqa?", "om", ECX_PRICES)
+        self.assertEqual(answer.intent.intent, "price")
+        self.assertIn("Natural G2", answer.text)
+        self.assertIn("895", answer.text)
+
+    async def test_low_sell_warning(self):
+        service = VoiceService(addis_api_key="", gemini_api_key="")
+        answer = await service.answer("I want to sell 500 kg natural G4 at 400 birr", "en", ECX_PRICES)
+        self.assertEqual(answer.intent.intent, "sell")
+        self.assertIn("below", answer.text)
+
+
+class TestVoiceListing(unittest.IsolatedAsyncioTestCase):
+    async def test_sell_intent_builds_draft(self):
+        service = VoiceService(addis_api_key="", gemini_api_key="")
+        answer = await service.answer("I want to sell 500 kg washed G2 at 1000 birr", "en", ECX_PRICES)
+        draft = draft_from_intent(answer.intent)
+        self.assertIsNotNone(draft)
+        self.assertEqual(draft.grade_name, "Washed G2")
+        self.assertEqual(draft.quantity_kg, 500)
+        self.assertEqual(draft.price_etb, 1000)
+
+    async def test_price_question_has_no_draft(self):
+        service = VoiceService(addis_api_key="", gemini_api_key="")
+        answer = await service.answer("Gatiin buna Natural G2 meeqa?", "om", ECX_PRICES)
+        self.assertIsNone(draft_from_intent(answer.intent))
+
+    def test_confirm_prompt_buttons(self):
+        listings = ListingService(api_url="http://localhost:5000/api/v1", api_key="test")
+        draft = ListingDraft("Natural", 4, 300.0)
+        draft_id = listings.save_draft(draft)
+        prompt, keyboard = listings.confirm_prompt(draft, draft_id, "en")
+        self.assertIn("Natural G4", prompt)
+        callbacks = [button.callback_data for button in keyboard.inline_keyboard[0]]
+        self.assertEqual(callbacks, [f"listconfirm:{draft_id}", f"listcancel:{draft_id}"])
+
+    def test_result_text_warns_below_floor(self):
+        draft = ListingDraft("Natural", 4, 300.0, 400.0)
+        message = ListingService.result_text({"listing": {"askingPricePerKg": 400}, "fairness": {"status": "very_low"}}, draft, "en")
+        self.assertIn("Listed", message)
+        self.assertIn("below the protection floor", message)
 
 
 class TestUserPreferenceStore(unittest.TestCase):

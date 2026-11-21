@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import NextLink from 'next/link';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { api } from '../../services/api';
+import { api, AiGradingError } from '../../services/api';
+import { formatGrade, Grade, REFERENCE_PRICES } from '../../utils/coffeePrices';
 import { Listing, Offer } from '../../types';
 import {
   User,
@@ -29,6 +30,7 @@ import {
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import VoiceInputButton from '../../components/common/VoiceInputButton'
 import AIAnalysisModal from '../../components/farmer/AIAnalysisModal';
+import { ManualGradeResult } from '../../components/farmer/ManualGradeForm';
 import VoiceListingAssistant from '../../components/farmer/VoiceListingAssistant';
 import ProfileSummaryCard from '../../components/common/ProfileSummaryCard';
 
@@ -43,40 +45,9 @@ export default function FarmerPortalPage() {
   const [editingListing, setEditingListing] = useState<Listing | null>(null);
   const [editPrice, setEditPrice] = useState('');
   const [editQuantity, setEditQuantity] = useState('');
-  const [incomingOffers, setIncomingOffers] = useState<any[]>([
-    {
-      _id: 'off-1',
-      buyerName: 'Oromia Coffee Farmers Union',
-      companyType: 'Cooperative Union',
-      fairnessScore: 96,
-      listingTitle: 'Highland Specialty Washed Lot - Mana Woreda',
-      offeredPricePerKg: 460,
-      marketPrice: 450,
-      quantityKg: 2000,
-      totalAmountETB: 920000,
-      status: 'pending',
-      isFair: true,
-      paymentTerms: 'Immediate CBE Bank Transfer Upon Inspection',
-      deliveryLocation: 'Jimma Union Receiving Terminal',
-      createdAt: '10 mins ago',
-    },
-    {
-      _id: 'off-2',
-      buyerName: 'Jimma Specialty Roasters',
-      companyType: 'Exporter / Roaster',
-      fairnessScore: 92,
-      listingTitle: 'Highland Specialty Washed Lot - Mana Woreda',
-      offeredPricePerKg: 455,
-      marketPrice: 450,
-      quantityKg: 500,
-      totalAmountETB: 227500,
-      status: 'pending',
-      isFair: true,
-      paymentTerms: '50% CBE Escrow Advance, 50% on Handover',
-      deliveryLocation: 'Jimma Exporter Dry Mill',
-      createdAt: '1 hour ago',
-    },
-  ]);
+  const [incomingOffers, setIncomingOffers] = useState<any[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   // Create Listing Modal
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -85,7 +56,7 @@ export default function FarmerPortalPage() {
   const [lotGrade, setLotGrade] = useState('Grade 1');
   const [lotProcessing, setLotProcessing] = useState<'washed' | 'natural'>('washed');
   const [lotQuantity, setLotQuantity] = useState(1500);
-  const [lotAskingPrice, setLotAskingPrice] = useState(415);
+  const [lotAskingPrice, setLotAskingPrice] = useState(1165);
   const [createSuccess, setCreateSuccess] = useState(false);
 
   // Voice Simulator Modal
@@ -102,6 +73,8 @@ export default function FarmerPortalPage() {
   const [aiAnalysisResult, setAiAnalysisResult] = useState<any | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [aiManualEntry, setAiManualEntry] = useState<{ title: string; photoUrl?: string } | null>(null);
+  const aiRunRef = useRef(0);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
   const normalizeListing = (item: any): Listing => ({
@@ -153,7 +126,7 @@ export default function FarmerPortalPage() {
           setProfileLocation({ woreda: profileRes.profile?.woreda || 'Mana', kebele: profileRes.profile?.kebele || 'Kenteri' });
         }
 
-        if (incomingOffersRes.success && incomingOffersRes.offers?.length) {
+        if (incomingOffersRes.success) {
           setIncomingOffers(
             incomingOffersRes.offers.map((offer: any) => ({
               _id: offer._id,
@@ -175,15 +148,12 @@ export default function FarmerPortalPage() {
             }))
           );
         }
-      } catch (err) {
-        try {
-          const savedProfile = JSON.parse(localStorage.getItem('buna_farmer_profile') || 'null');
-          if (savedProfile) {
-            setFarmerProfile(savedProfile);
-            setProfileLocation({ woreda: savedProfile.woreda || 'Mana', kebele: savedProfile.kebele || 'Kenteri' });
-          }
-        } catch { /* Keep the default local demo origin. */ }
-        console.error(err);
+      } catch (err: any) {
+        setLoadError(
+          err?.status === 401 || err?.status === 403
+            ? 'Sign in as a farmer to see your lots and offers.'
+            : err?.message || 'Could not load your dashboard.'
+        );
       }
     }
     loadData();
@@ -237,10 +207,8 @@ export default function FarmerPortalPage() {
       setIncomingOffers((prev) =>
         prev.map((o) => (o._id === id ? { ...o, status: 'accepted' } : o))
       );
-    } catch {
-      setIncomingOffers((prev) =>
-        prev.map((o) => (o._id === id ? { ...o, status: 'accepted' } : o))
-      );
+    } catch (error: any) {
+      alert(error.message || 'Could not accept this offer.');
     }
   };
 
@@ -250,10 +218,8 @@ export default function FarmerPortalPage() {
       setIncomingOffers((prev) =>
         prev.map((o) => (o._id === id ? { ...o, status: 'rejected' } : o))
       );
-    } catch {
-      setIncomingOffers((prev) =>
-        prev.map((o) => (o._id === id ? { ...o, status: 'rejected' } : o))
-      );
+    } catch (error: any) {
+      alert(error.message || 'Could not reject this offer.');
     }
   };
 
@@ -272,48 +238,23 @@ export default function FarmerPortalPage() {
         description: lotVariety,
         moisturePercentage: 11.2,
         photos: aiAnalysisResult?.photoUrl ? [aiAnalysisResult.photoUrl] : [],
-        aiEstimatedGrade: aiAnalysisResult?.grade_tier || '',
-        aiConfidence: aiAnalysisResult?.confidence || '',
-        aiDefectsSummary: aiAnalysisResult?.defects_summary || aiAnalysisResult?.sorting_advice_english || '',
+        ...(aiAnalysisResult && aiAnalysisResult.provider !== 'manual'
+          ? {
+              aiEstimatedGrade: aiAnalysisResult.grade_tier || '',
+              aiConfidence: aiAnalysisResult.confidence || '',
+              aiDefectsSummary: aiAnalysisResult.defects_summary || aiAnalysisResult.sorting_advice_english || '',
+            }
+          : {}),
       });
 
       if (res.success && res.listing) {
         setMyListings([normalizeListing(res.listing), ...myListings]);
       }
-    } catch {
-      const newLot: Listing = {
-        _id: `lot-${Date.now()}`,
-        farmer: {
-          _id: user?.id || 'f1',
-          fullName: user?.fullName || 'Gemechu Daba',
-          phone: user?.phone || '+251 917 112 233',
-        },
-        farmerProfile: {
-          _id: 'fp-1',
-          averageQualityScore: 89,
-          woreda: 'Mana',
-          badge: 'Gold',
-        },
-        title: lotTitle,
-        variety: lotVariety,
-        grade: lotGrade as any,
-        processing: lotProcessing,
-        harvestYear: 2026,
-        quantityKg: lotQuantity,
-        askingPricePerKg: lotAskingPrice,
-        marketReferencePrice: 410,
-        priceDiffPercentage: 1.2,
-        isFairPrice: true,
-        location: { region: 'Oromia', zone: farmerProfile?.zone || 'Jimma', woreda: profileLocation.woreda, kebele: profileLocation.kebele },
-        cuppingScore: 88.0,
-        moisturePercentage: 11.2,
-        certifications: ['Jimma Heirloom Verified'],
-        photos: aiAnalysisResult?.photoUrl ? [aiAnalysisResult.photoUrl] : [],
-        status: 'open',
-        createdAt: new Date().toISOString(),
-      };
-      setMyListings([newLot, ...myListings]);
+    } catch (error: any) {
+      setCreateError(error.message || 'Could not create this listing.');
+      return;
     }
+    setCreateError(null);
 
     setCreateSuccess(true);
     setTimeout(() => {
@@ -331,11 +272,11 @@ export default function FarmerPortalPage() {
       setIsRecording(false);
       if (queryText.includes('Buna') || queryText.includes('gatii')) {
         setVoiceResponse(
-          '☕ [Afaan Oromoo]: Gatiin buna dhiqamee (Washed Grade 1) har’a Jimmaatti 410 ETB/kg dha. Gatiin gadi-aanaa (floor) 390 ETB/kg dha. Bittoonni Oromia Union fi Jimma Specialty gatii qajeelaa dhiyeessaa jiru.'
+          '☕ [Afaan Oromoo]: Gatiin buna dhiqamee (Washed Grade 1) har’a Jimmaatti 1,150 ETB/kg dha. Gatiin gadi-aanaa (floor) 1,070 ETB/kg dha. Bittoonni Oromia Union fi Jimma Specialty gatii qajeelaa dhiyeessaa jiru.'
         );
       } else {
         setVoiceResponse(
-          '☕ [አማርኛ]: የዛሬው የጅማ ታጥቦ የተዘጋጀ ግሬድ 1 የቡና መነሻ ዋጋ በኪሎግራም 410 የኢትዮጵያ ብር ነው። ዝቅተኛው ህጋዊ ዋጋ (Floor) 390 ብር ነው። ኦሮሚያ ዩኒየን እና ጅማ ስፔሻሊቲ በከፍተኛ ዋጋ እየገዙ ይገኛሉ።'
+          '☕ [አማርኛ]: የዛሬው የጅማ ታጥቦ የተዘጋጀ ግሬድ 1 የቡና መነሻ ዋጋ በኪሎግራም 1,150 የኢትዮጵያ ብር ነው። ዝቅተኛው ዋጋ (Floor) 1,070 ብር ነው። ኦሮሚያ ዩኒየን እና ጅማ ስፔሻሊቲ በከፍተኛ ዋጋ እየገዙ ይገኛሉ።'
         );
       }
     }, 1200);
@@ -346,62 +287,70 @@ export default function FarmerPortalPage() {
     setAiPhoto(file);
     setAiPhotoPreview(URL.createObjectURL(file));
     setAiError(null);
+    setAiManualEntry(null);
     setAiAnalysisResult(null);
     setExpandedSections({});
   };
 
   const handleAiAnalyze = async () => {
     if (!aiPhoto) return;
+    const run = ++aiRunRef.current;
     setIsAnalyzing(true);
     setAiError(null);
-     try {
-       const result = await api.analyzeCoffeePhoto(aiPhoto, profileLocation);
-       setAiAnalysisResult({ ...result.analysis, location: result.location, photoUrl: result.photoUrl });
-     } catch (err: any) {
-       // Fallback analysis when AI/backend is unavailable
-       const fallback = {
-         grade_tier: 'Natural G4',
-         processing_type: 'Natural',
-         defect_percentage: '~20',
-         color_quality: 'fair',
-         uniformity_score: 5,
-         moisture_level: 'medium',
-         grade_number: 4,
-         defects_summary: 'Mixed defects detected. See sorting tips below.',
-         estimated_price_min_etb: 48,
-         estimated_price_max_etb: 59,
-         confidence: 'medium',
-         location: { region: farmerProfile?.region || 'Oromia', zone: farmerProfile?.zone || 'Jimma', ...profileLocation },
-         is_fallback: true,
-         sorting_advice_english: 'Sort beans by color and size. Remove black, broken, and insect-damaged beans before sale.',
-         tips_oromo: ['Buna idileetti fincaanii wal hin qabneetti hidha.', 'Buna gurracha, tokkichi, fi kan qorichiwaan hidha.'],
-         tips_amharic: ['ቡናውን በቀለም እና መጠን ያስተካክሉ።', 'ጥሩ፣ ቆጣቢ እና የአስተሳሰብ ተጠቃሚ ቡና ውጭ ያድርጉ።'],
-       };
-       setAiAnalysisResult(fallback);
-       setAiError(null);
-     } finally {
-      setIsAnalyzing(false);
+    try {
+      const result = await api.analyzeCoffeePhoto(aiPhoto, profileLocation);
+      if (run !== aiRunRef.current) return;
+      setAiManualEntry(null);
+      setAiAnalysisResult({ ...result.analysis, location: result.location, photoUrl: result.photoUrl });
+    } catch (err: any) {
+      if (run !== aiRunRef.current) return;
+      setAiManualEntry(
+        err instanceof AiGradingError
+          ? { title: err.title, photoUrl: err.photoUrl }
+          : { title: 'AI is not responding right now' }
+      );
+      setAiError(err.message || 'AI grading is unavailable right now. Enter the grade and price yourself.');
+    } finally {
+      if (run === aiRunRef.current) setIsAnalyzing(false);
     }
   };
 
+  const handleAiSkipToManual = () => {
+    aiRunRef.current++;
+    setIsAnalyzing(false);
+    setAiError('Choose the ECX grade and your asking price below.');
+    setAiManualEntry({ title: 'Manual grading' });
+  };
+
   const handleAiReset = () => {
+    aiRunRef.current++;
+    setIsAnalyzing(false);
     setAiPhoto(null);
     setAiPhotoPreview(null);
     setAiAnalysisResult(null);
     setAiError(null);
+    setAiManualEntry(null);
     setExpandedSections({});
   };
 
-  const handleAiCreateListing = () => {
+  const handleAiManualSubmit = (result: ManualGradeResult) => {
+    setAiAnalysisResult(result);
+    setShowAIAnalysisModal(false);
+    setShowCreateModal(true);
+    setLotGrade(result.grade);
+    setLotProcessing(result.processing_type.toLowerCase() as 'washed' | 'natural');
+    setLotAskingPrice(result.asking_price_etb);
+  };
+
+  const handleAiCreateListing = (askingPrice: number) => {
     if (!aiAnalysisResult) return;
     setShowAIAnalysisModal(false);
     setShowCreateModal(true);
     const gradeLabel = aiAnalysisResult.grade_tier || '';
     const gradeNumber = gradeLabel.match(/G([1-5])/i)?.[1];
     setLotGrade(gradeLabel.toLowerCase().includes('specialty') ? 'Specialty' : `Grade ${gradeNumber || 2}`);
-    setLotProcessing((aiAnalysisResult.processing_type?.toLowerCase() || 'washed') as any);
-    const avgPrice = Math.round(((aiAnalysisResult.estimated_price_min_etb || 0) + (aiAnalysisResult.estimated_price_max_etb || 0)) / 2);
-    setLotAskingPrice(avgPrice || 415);
+    setLotProcessing(aiAnalysisResult.processing_type?.toLowerCase() === 'natural' ? 'natural' : 'washed');
+    setLotAskingPrice(askingPrice);
   };
 
   const toggleSection = (key: string) => {
@@ -430,10 +379,7 @@ export default function FarmerPortalPage() {
 
             <button
               onClick={() => {
-                setAiPhoto(null);
-                setAiPhotoPreview(null);
-                setAiAnalysisResult(null);
-                setAiError(null);
+                handleAiReset();
                 setShowAIAnalysisModal(true);
               }}
               className="px-4 py-2.5 rounded-xl bg-forest-600 hover:bg-forest-500 border border-forest-400/50 text-forest-50 font-semibold text-xs flex items-center gap-2 shadow-sm transition-all"
@@ -458,6 +404,24 @@ export default function FarmerPortalPage() {
         ]}
       />
 
+      <section className="grid gap-3 md:grid-cols-3">
+        <button type="button" onClick={() => setShowVoiceListingAssistant(true)} className="surface p-5 text-left transition hover:-translate-y-0.5">
+          <p className="font-mono text-[11px] font-bold text-gold-700">01 · Voice</p>
+          <h2 className="mt-2 text-base font-extrabold text-coffee-950">Speak the lot</h2>
+          <p className="mt-1 text-sm text-coffee-600">Afaan Oromoo or Amharic. Quantity, then price, then publish.</p>
+        </button>
+        <button type="button" onClick={() => { handleAiReset(); setShowAIAnalysisModal(true); }} className="surface p-5 text-left transition hover:-translate-y-0.5">
+          <p className="font-mono text-[11px] font-bold text-forest-700">02 · Grade</p>
+          <h2 className="mt-2 text-base font-extrabold text-coffee-950">Photograph the beans</h2>
+          <p className="mt-1 text-sm text-coffee-600">A photo returns an ECX-style grade and a fair price band.</p>
+        </button>
+        <a href="#incoming-offers" className="surface p-5 transition hover:-translate-y-0.5">
+          <p className="font-mono text-[11px] font-bold text-cherry-700">03 · Floor</p>
+          <h2 className="mt-2 text-base font-extrabold text-coffee-950">Accept a protected bid</h2>
+          <p className="mt-1 text-sm text-coffee-600">Offers are shown against the ECX benchmark before you lock a contract.</p>
+        </a>
+      </section>
+
       <section className="rounded-3xl border border-coffee-200 bg-white p-5 shadow-sm sm:p-7">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-extrabold text-coffee-950">Sales performance</h2><p className="mt-1 text-xs text-coffee-600">Volume, revenue, and estimated profit from paid and completed trades.</p></div><span className="rounded-full bg-forest-50 px-3 py-1.5 text-[11px] font-bold text-forest-800">Premium above ECX: {Math.round(premiumEarned).toLocaleString()} ETB</span></div>
         {completedSales.length ? <div className="grid gap-6 lg:grid-cols-3">
@@ -469,18 +433,25 @@ export default function FarmerPortalPage() {
       </section>
 
       {/* Incoming Offers from Verified Buyers */}
-      <div className="space-y-4">
+      {loadError && (
+        <div className="rounded-2xl border border-cherry-200 bg-cherry-50 px-4 py-3 text-sm text-cherry-800">{loadError}</div>
+      )}
+
+      <div id="incoming-offers" className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-coffee-950">
               Incoming Purchase Offers ({incomingOffers.filter((o) => o.status === 'pending').length} Pending)
             </h2>
             <p className="text-xs text-coffee-600">
-              Verified buyers bidding on your coffee lots with official ECX floor verification.
+              Verified buyers bidding on your coffee lots checked against the protection floor.
             </p>
           </div>
         </div>
 
+        {incomingOffers.length === 0 && !loadError && (
+          <p className="surface px-5 py-6 text-sm text-coffee-600">No offers yet. Verified buyers will appear here when they bid on your lots.</p>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {incomingOffers.map((offer) => (
             <div
@@ -537,7 +508,7 @@ export default function FarmerPortalPage() {
                 </div>
                 <div className="flex items-center gap-1.5 text-[11px] text-forest-700 font-semibold pt-1">
                   <CheckCircle2 className="w-3.5 h-3.5 text-forest-600" />
-                  <span>Above ECX statutory floor ({offer.marketPrice} ETB benchmark)</span>
+                  <span>Above the protection floor ({offer.marketPrice} ETB reference)</span>
                 </div>
               </div>
 
@@ -602,7 +573,7 @@ export default function FarmerPortalPage() {
               <div className="flex justify-between items-start">
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-gold-600">
-                    {lot.grade} • {lot.processing}
+                    {formatGrade(lot.processing, lot.grade)}
                   </span>
                   <h3 className="font-bold text-coffee-950 text-base">{lot.title}</h3>
                 </div>
@@ -669,7 +640,7 @@ export default function FarmerPortalPage() {
                   List Coffee for Verified Buyers
                 </h3>
                 <p className="text-xs text-coffee-600">
-                  Fair price suggestions are automatically matched with Jimma ECX daily floor benchmarks.
+                  Fair price suggestions are matched with estimated 2025/26 Jimma reference prices.
                 </p>
               </div>
 
@@ -682,6 +653,9 @@ export default function FarmerPortalPage() {
                 </div>
               ) : (
                 <form onSubmit={handleCreateListing} className="space-y-4 text-xs">
+                  {createError && (
+                    <div className="rounded-xl border border-cherry-200 bg-cherry-50 px-3 py-2 text-cherry-800">{createError}</div>
+                  )}
                   <div>
                     <div className="flex items-center justify-between mb-1 gap-2">
                       <label className="font-semibold text-coffee-900 block">Lot Title:</label>
@@ -726,10 +700,12 @@ export default function FarmerPortalPage() {
                         onChange={(e) => setLotGrade(e.target.value)}
                         className="w-full bg-coffee-50/50 border border-coffee-300 rounded-xl px-3 py-2 text-xs text-coffee-950 focus:outline-none focus:ring-2 focus:ring-gold-500 font-medium"
                       >
-                        <option value="Specialty">Specialty (Q1 85+ pts)</option>
-                        <option value="Grade 1">Grade 1 Export</option>
-                        <option value="Grade 2">Grade 2 Commercial</option>
-                        <option value="Grade 3">Grade 3</option>
+                        <option value="Specialty">Specialty (cup 85+)</option>
+                        <option value="Grade 1">G1</option>
+                        <option value="Grade 2">G2</option>
+                        <option value="Grade 3">G3</option>
+                        <option value="Grade 4">G4</option>
+                        <option value="Grade 5">G5</option>
                       </select>
                     </div>
 
@@ -766,7 +742,7 @@ export default function FarmerPortalPage() {
                       </label>
                       <input
                         type="number"
-                        min="250"
+                        min="500"
                         value={lotAskingPrice}
                         onChange={(e) => setLotAskingPrice(Number(e.target.value))}
                         className="w-full bg-coffee-50/50 border border-coffee-300 rounded-xl px-3.5 py-2 text-xs text-coffee-950 focus:outline-none focus:ring-2 focus:ring-gold-500 font-bold"
@@ -776,8 +752,8 @@ export default function FarmerPortalPage() {
                   </div>
 
                   <div className="p-3 rounded-xl bg-forest-50 border border-forest-200 text-forest-800 text-[11px] flex items-center justify-between">
-                    <span>ECX Recommended Floor for this Grade:</span>
-                    <strong className="text-forest-900">410 ETB/kg</strong>
+                    <span>Protection floor for this grade:</span>
+                    <strong className="text-forest-900">{REFERENCE_PRICES[lotProcessing]?.[lotGrade as Grade]?.floor.toLocaleString() ?? '—'} ETB/kg</strong>
                   </div>
 
                   <div className="pt-2 flex gap-3">
@@ -876,7 +852,7 @@ export default function FarmerPortalPage() {
                     <span className="w-1.5 h-5 bg-gold-400 rounded-full animate-bounce" />
                   </div>
                   <p className="text-xs font-semibold text-gold-300">
-                    Transcribing and checking Jimma ECX live database...
+                    Transcribing and checking Jimma reference prices...
                   </p>
                 </div>
               ) : voiceResponse ? (
@@ -910,6 +886,9 @@ export default function FarmerPortalPage() {
         analysisResult={aiAnalysisResult}
         isAnalyzing={isAnalyzing}
         error={aiError}
+        manualEntry={aiManualEntry}
+        onManualSubmit={handleAiManualSubmit}
+        onSkipToManual={handleAiSkipToManual}
         expandedSections={expandedSections}
         onToggleSection={toggleSection}
         onPhotoSelect={handleAiPhotoSelect}

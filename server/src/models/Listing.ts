@@ -129,7 +129,7 @@ const ListingSchema = new Schema<IListing>(
     marketReferencePrice: {
       type: Number,
       required: true,
-      default: 320,
+      default: 720,
     },
     priceFairnessDiff: {
       type: Number,

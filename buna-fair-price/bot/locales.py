@@ -88,8 +88,7 @@ TEXTS = {
         "label_tips": "💡 Gorsa Qonnaan Bulaaf:",
         "voice_ack": (
             "🎙️ <b>Sagaleen keessan nu gaheera!</b>\n\n"
-            "Tajaajilli sagalee Afaan Oromoo fi Amaaraa dhiyootti ni eegala.\n"
-            "Ammaaf maaloo suuraa buna keessanii nuuf ergaa qorannoo argachuuf."
+            "Dhaggeeffachaa jirra... Gatii buna keessanii yeroo muraasa keessatti isinii himna."
         ),
         "color_names": {
             "dark green": "Magariisa Dukkanaa'aa (Baay'ee Gaarii)",
@@ -186,8 +185,7 @@ TEXTS = {
         "label_tips": "💡 ለአርሶ አደሩ የሚመከሩ:",
         "voice_ack": (
             "🎙️ <b>የድምጽ መልዕክትዎ ደርሶናል!</b>\n\n"
-            "የድምጽ አገልግሎት (በአፋን ኦሮሞ እና በአማርኛ) በቅርቡ ይጀመራል!\n"
-            "ለአሁኑ የቡናዎን ፎቶ በመላክ የጥራት ደረጃውን ማወቅ ይችላሉ።"
+            "እያዳመጥን ነው... የቡናዎን ዋጋ በቅርቡ እንነግርዎታለን።"
         ),
         "color_names": {
             "dark green": "ጥቁር አረንጓዴ (በጣም ጥሩ)",
@@ -282,8 +280,7 @@ TEXTS = {
         "label_tips": "💡 Farmer Tips:",
         "voice_ack": (
             "🎙️ <b>Voice message received!</b>\n\n"
-            "Afaan Oromoo and Amharic voice interaction is coming in the next update!\n"
-            "For now, please send a photo of your coffee beans to get an instant grade."
+            "Listening... Ask about prices or say how much coffee you want to sell."
         ),
         "color_names": {
             "dark green": "Dark Green (Excellent)",

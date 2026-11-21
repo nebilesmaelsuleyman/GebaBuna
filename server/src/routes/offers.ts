@@ -7,6 +7,7 @@ import { Trade } from '../models/Trade';
 import { BuyerProfile } from '../models/BuyerProfile';
 import { getMarketReferencePrice, evaluatePriceFairness } from '../services/marketPriceService';
 import { createNotification } from '../services/notificationService';
+import { floorFor } from '../constants/coffeePrices';
 
 const router = Router();
 
@@ -47,6 +48,16 @@ router.post(
 
       const buyerProfile = await BuyerProfile.findOne({ user: req.user!._id });
       const refPrice = await getMarketReferencePrice(listing.processing, listing.grade);
+      const floorPrice = floorFor(refPrice);
+      if (validated.offeredPricePerKg < floorPrice) {
+        res.status(400).json({
+          success: false,
+          message: `Offer rejected: ${validated.offeredPricePerKg} ETB/kg is below the farmer protection floor of ${floorPrice} ETB/kg for ${listing.processing} ${listing.grade}.`,
+          floorPrice,
+          marketReferencePrice: refPrice,
+        });
+        return;
+      }
       const fairness = evaluatePriceFairness(validated.offeredPricePerKg, refPrice);
 
       const offer = await Offer.create({
@@ -133,16 +144,20 @@ router.get(
 
 /**
  * POST /api/v1/offers/:id/accept
- * Farmer accepts offer -> Creates Trade deal!
+ * The party who did not make the latest proposal accepts it -> Creates Trade deal!
+ * Farmer accepts a buyer's offer or buyer counter; buyer accepts a farmer counter.
  */
 router.post(
   '/:id/accept',
   authenticateJWT,
-  requireRoles(['farmer']),
+  requireRoles(['farmer', 'buyer']),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const offer = await Offer.findOne({ _id: req.params.id, farmer: req.user!._id });
-      if (!offer) {
+      const offer = await Offer.findById(req.params.id);
+      const userId = req.user!._id.toString();
+      const isFarmer = offer?.farmer.toString() === userId;
+      const isBuyer = offer?.buyer.toString() === userId;
+      if (!offer || (!isFarmer && !isBuyer)) {
         res.status(404).json({ success: false, message: 'Offer not found or unauthorized' });
         return;
       }
@@ -150,6 +165,20 @@ router.post(
       if (offer.status !== 'pending' && offer.status !== 'countered') {
         res.status(400).json({ success: false, message: `Offer is already ${offer.status}` });
         return;
+      }
+
+      const lastProposer = offer.status === 'countered' ? offer.counteredBy : 'buyer';
+      if ((isFarmer && lastProposer === 'farmer') || (isBuyer && lastProposer === 'buyer')) {
+        res.status(400).json({ success: false, message: 'You made the latest proposal. Wait for the other side to accept, counter, or reject it.' });
+        return;
+      }
+
+      if (isBuyer) {
+        const buyerProfile = await BuyerProfile.findOne({ user: req.user!._id });
+        if (buyerProfile?.verificationStatus !== 'verified') {
+          res.status(403).json({ success: false, message: 'Only verified buyers can finalize a trade.' });
+          return;
+        }
       }
 
       const listing = await Listing.findById(offer.listing);
@@ -188,13 +217,12 @@ router.post(
       }
       await listing.save();
 
-      // Notify buyer that offer was accepted
       await createNotification({
-        recipient: offer.buyer,
+        recipient: isFarmer ? offer.buyer : offer.farmer,
         type: 'offer_accepted',
         title: 'Offer Accepted! Deal Created 🎉',
-        message: `Farmer accepted your offer for ${listing.coffeeType}. Trade ID: ${trade._id}. Next step: Delivery and Payment confirmation.`,
-        link: `/buyer/trades/${trade._id}`,
+        message: `${isFarmer ? 'The farmer' : 'The buyer'} accepted ${agreedPrice} ETB/kg for ${agreedQty} kg of ${listing.coffeeType}. Trade ID: ${trade._id}. Next step: Delivery and Payment confirmation.`,
+        link: `/trades/${trade._id}`,
         metadata: { tradeId: trade._id },
       });
 
@@ -234,7 +262,27 @@ router.post(
         return;
       }
 
-      offer.counterPricePerKg = Number(counterPricePerKg);
+      if (offer.status !== 'pending' && offer.status !== 'countered') {
+        res.status(400).json({ success: false, message: `Offer is already ${offer.status}` });
+        return;
+      }
+
+      const price = Number(counterPricePerKg);
+      if (!Number.isFinite(price) || price <= 0) {
+        res.status(400).json({ success: false, message: 'counterPricePerKg must be a positive number' });
+        return;
+      }
+      const floorPrice = floorFor(offer.marketPriceAtOffer);
+      if (price < floorPrice) {
+        res.status(400).json({
+          success: false,
+          message: `Counter-offer rejected: ${price} ETB/kg is below the farmer protection floor of ${floorPrice} ETB/kg.`,
+          floorPrice,
+        });
+        return;
+      }
+
+      offer.counterPricePerKg = price;
       if (counterQuantityKg) offer.counterQuantityKg = Number(counterQuantityKg);
       offer.counterMessage = counterMessage || '';
       offer.counteredBy = isFarmer ? 'farmer' : 'buyer';
@@ -268,8 +316,16 @@ router.post(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const offer = await Offer.findById(req.params.id);
-      if (!offer) {
-        res.status(404).json({ success: false, message: 'Offer not found' });
+      const userId = req.user!._id.toString();
+      const isFarmer = offer?.farmer.toString() === userId;
+      const isBuyer = offer?.buyer.toString() === userId;
+      if (!offer || (!isFarmer && !isBuyer)) {
+        res.status(404).json({ success: false, message: 'Offer not found or unauthorized' });
+        return;
+      }
+
+      if (offer.status !== 'pending' && offer.status !== 'countered') {
+        res.status(400).json({ success: false, message: `Offer is already ${offer.status}` });
         return;
       }
 
@@ -277,11 +333,11 @@ router.post(
       await offer.save();
 
       await createNotification({
-        recipient: offer.buyer,
+        recipient: isFarmer ? offer.buyer : offer.farmer,
         type: 'offer_rejected',
         title: 'Offer Declined',
-        message: `Farmer has declined the offer for ${offer.quantityKg} kg.`,
-        link: '/buyer/offers',
+        message: `${isFarmer ? 'The farmer' : 'The buyer'} declined the offer for ${offer.quantityKg} kg.`,
+        link: isFarmer ? '/buyer' : '/farmer',
       });
 
       res.json({ success: true, message: 'Offer rejected', offer });

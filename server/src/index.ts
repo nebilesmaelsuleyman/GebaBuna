@@ -20,6 +20,7 @@ import notificationRoutes from './routes/notifications';
 import botRoutes from './routes/bot';
 import voiceRoutes from './routes/voice';
 import aiAnalysisRoutes from './routes/aiAnalysis';
+import statsRoutes from './routes/stats';
 
 const app = express();
 
@@ -62,6 +63,7 @@ app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/bot', botRoutes);
 app.use('/api/v1/voice', voiceRoutes);
 app.use('/api/v1/ai', aiAnalysisRoutes);
+app.use('/api/v1/stats', statsRoutes);
 
 // Root greeting
 app.get('/', (_req, res) => {

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '../../../../services/api';
+import { formatGrade } from '../../../../utils/coffeePrices';
 import { Trade } from '../../../../types';
 import {
   ShieldCheck,
@@ -477,7 +478,7 @@ export default function TradeReportCardPage() {
               </div>
               <div className="p-3 rounded-xl bg-coffee-50/50">
                 <span className="text-[10px] text-coffee-500 uppercase tracking-wider block mb-1">Grade</span>
-                <span className="font-bold text-xl text-coffee-950">{trade.listing?.grade || '—'}</span>
+                <span className="font-bold text-xl text-coffee-950">{formatGrade(trade.listing?.processing, trade.listing?.grade)}</span>
               </div>
               <div className="p-3 rounded-xl bg-coffee-50/50">
                 <span className="text-[10px] text-coffee-500 uppercase tracking-wider block mb-1">Processing</span>

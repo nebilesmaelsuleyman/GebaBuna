@@ -46,8 +46,17 @@ TELEGRAM_BOT_TOKEN = env_value("TELEGRAM_BOT_TOKEN", "BOT_TOKEN", "BUNAJIMMA_BOT
 
 # AI Vision API Keys (Primary: Gemini, Fallback: OpenRouter)
 GEMINI_API_KEY = env_value("GEMINI_API_KEY", "GOOGLE_API_KEY")
+GEMINI_MODEL = env_value("GEMINI_MODEL", default="gemini-3.7-flash")
 OPENROUTER_API_KEY = env_value("OPENROUTER_API_KEY", "OpenRouter_API_KEY")
 OPENROUTER_MODEL = env_value("OPENROUTER_MODEL", default="openrouter/free")
+
+# Voice agent (Addis AI speech-to-text and text-to-speech for Afaan Oromoo and Amharic)
+ADDIS_API_KEY = env_value("ADDIS_API_KEY", "ADDIS_AI_API_KEY")
+BOT_USERNAME = env_value("TELEGRAM_BOT_USERNAME", default="bunajimmabot")
+
+# Buna server, used to create marketplace listings after the farmer confirms (must match server BOT_API_KEY)
+BUNA_API_URL = env_value("BUNA_API_URL", default="http://localhost:5000/api/v1")
+BUNA_BOT_API_KEY = env_value("BOT_API_KEY", "BUNA_BOT_API_KEY", default="buna_bot_secure_api_key_jimma_2026")
 
 # Defaults
 DEFAULT_LANGUAGE = env_value("DEFAULT_LANGUAGE", default="om")  # Default to Afaan Oromoo for Jimma region

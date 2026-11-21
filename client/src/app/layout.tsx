@@ -5,6 +5,7 @@ import { AuthProvider } from '../context/AuthContext';
 import { LanguageProvider } from '../context/LanguageContext';
 import { Navbar } from '../components/layout/Navbar';
 import { Footer } from '../components/layout/Footer';
+import { OfflineBanner } from '../components/layout/OfflineBanner';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const plusJakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-jakarta' });
@@ -12,7 +13,7 @@ const plusJakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-ja
 export const metadata: Metadata = {
   title: 'Buna Fair Price (ቡና ዋጋ) — Jimma Coffee Transparency & Exchange',
   description:
-    'Empowering Ethiopian coffee smallholders with real-time ECX price transparency, verified fair buyer badges, and direct marketplace access in Afaan Oromoo, Amharic, and English.',
+    'Empowering Ethiopian coffee smallholders with transparent reference prices, verified fair buyer badges, and direct marketplace access in Afaan Oromoo, Amharic, and English.',
 };
 
 export default function RootLayout({
@@ -26,7 +27,10 @@ export default function RootLayout({
         <LanguageProvider>
           <AuthProvider>
             <Navbar />
-            <main className="flex-1 pt-16">{children}</main>
+            <main className="flex-1 pt-[108px]">
+              <OfflineBanner />
+              {children}
+            </main>
             <Footer />
           </AuthProvider>
         </LanguageProvider>

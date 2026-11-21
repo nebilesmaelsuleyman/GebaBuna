@@ -218,6 +218,14 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction): P
       return;
     }
 
+    if (!user.isActive) {
+      res.status(403).json({
+        success: false,
+        message: 'This account was removed by the Jimma Agriculture Bureau. Contact the bureau to appeal.',
+      });
+      return;
+    }
+
     // Fetch associated profile details
     let profileData: any = null;
     if (user.role === 'farmer') {
@@ -314,6 +322,14 @@ router.post('/otp-login', async (req: Request, res: Response, next: NextFunction
         processingMethods: ['natural', 'washed'],
         preferredLanguage: 'om',
       });
+    }
+
+    if (!user.isActive) {
+      res.status(403).json({
+        success: false,
+        message: 'This account was removed by the Jimma Agriculture Bureau. Contact the bureau to appeal.',
+      });
+      return;
     }
 
     const token = jwt.sign(

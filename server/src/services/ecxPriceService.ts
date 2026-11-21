@@ -12,25 +12,17 @@
 import { MarketPrice, CoffeeGrade, ProcessingType } from '../models/MarketPrice';
 import https from 'https';
 import http from 'http';
+import { REFERENCE_PRICES, PRICE_SOURCE_NOTE } from '../constants/coffeePrices';
 
 const ECX_API_BASE = process.env.ECX_API_BASE || '';
 const ECX_API_KEY = process.env.ECX_API_KEY || '';
 
-// Known Jimma ECX reference benchmarks used as fallback when no live source responds
-const FALLBACK_PRICES: Record<string, { current: number; floor: number; ceiling: number }> = {
-  washed_Specialty: { current: 450, floor: 430, ceiling: 480 },
-  'washed_Grade 1': { current: 410, floor: 390, ceiling: 435 },
-  'washed_Grade 2': { current: 370, floor: 350, ceiling: 390 },
-  'washed_Grade 3': { current: 320, floor: 300, ceiling: 340 },
-  'washed_Grade 4': { current: 280, floor: 260, ceiling: 300 },
-  'washed_Grade 5': { current: 240, floor: 220, ceiling: 260 },
-  natural_Specialty: { current: 420, floor: 400, ceiling: 450 },
-  'natural_Grade 1': { current: 380, floor: 360, ceiling: 400 },
-  'natural_Grade 2': { current: 340, floor: 320, ceiling: 360 },
-  'natural_Grade 3': { current: 295, floor: 275, ceiling: 315 },
-  'natural_Grade 4': { current: 255, floor: 235, ceiling: 275 },
-  'natural_Grade 5': { current: 220, floor: 200, ceiling: 240 },
-};
+// Estimated Jimma reference prices used as fallback when no live source responds
+const FALLBACK_PRICES: Record<string, { current: number; floor: number; ceiling: number }> = Object.fromEntries(
+  (Object.keys(REFERENCE_PRICES) as Array<keyof typeof REFERENCE_PRICES>).flatMap((processing) =>
+    Object.entries(REFERENCE_PRICES[processing]).map(([grade, price]) => [`${processing}_${grade}`, price])
+  )
+);
 
 type FetchSource = {
   name: string;
@@ -273,60 +265,20 @@ export async function refreshECXPricesFromInternet(): Promise<{
 }
 
 /**
- * Get market reference price with live internet fetch as primary source.
- * Falls back to MongoDB cached data, then hardcoded defaults.
+ * Get the market reference price: stored MongoDB estimate first, then the built-in table.
  */
 export async function getLiveMarketReferencePrice(
   processing: ProcessingType,
   grade: CoffeeGrade
 ): Promise<{ price: number; source: string; isLive: boolean }> {
-  // 1. Try live internet fetch
-  try {
-    const live = await fetchLiveECXPrices();
-    if (live.success && live.prices.length > 0) {
-      const match = live.prices.find(
-        (p) => p.processing === processing && p.grade === grade
-      );
-      if (match) {
-        // Persist the live price to MongoDB for future reads
-        await MarketPrice.findOneAndUpdate(
-          { processing, grade },
-          {
-            $set: {
-              currentPricePerKgETB: match.currentPricePerKgETB,
-              floorPricePerKgETB: match.floorPricePerKgETB,
-              ceilingPricePerKgETB: match.ceilingPricePerKgETB,
-              source: match.source,
-              lastUpdated: new Date(),
-            },
-            $push: {
-              history: {
-                date: new Date(),
-                pricePerKgETB: match.currentPricePerKgETB,
-                sourceNote: 'Live ECX internet fetch',
-              },
-            },
-          },
-          { upsert: true, new: true }
-        );
-        return {
-          price: match.currentPricePerKgETB,
-          source: match.source,
-          isLive: true,
-        };
-      }
-    }
-  } catch (err: any) {
-    console.warn(`[ECX Live] Live fetch failed: ${err.message}`);
-  }
-
-  // 2. Fall back to MongoDB cached price
+  // No public ECX price API exists, so stored estimates are the source of truth.
+  // Admins can still try refreshECXPricesFromInternet() via POST /market-prices/refresh.
   try {
     const cached = await MarketPrice.findOne({ processing, grade });
     if (cached) {
       return {
         price: cached.currentPricePerKgETB,
-        source: cached.source || 'ECX cached (MongoDB)',
+        source: cached.source || PRICE_SOURCE_NOTE,
         isLive: false,
       };
     }
@@ -334,16 +286,16 @@ export async function getLiveMarketReferencePrice(
     console.warn(`[ECX Live] MongoDB read failed: ${err.message}`);
   }
 
-  // 3. Hardcoded fallback
+  // Built-in estimate table
   const key = `${processing}_${grade}`;
   const fallback = FALLBACK_PRICES[key];
   if (fallback) {
     return {
       price: fallback.current,
-      source: 'ECX benchmark (hardcoded fallback)',
+      source: PRICE_SOURCE_NOTE,
       isLive: false,
     };
   }
 
-  return { price: 320, source: 'Default fallback', isLive: false };
+  return { price: REFERENCE_PRICES.natural['Grade 4'].current, source: PRICE_SOURCE_NOTE, isLive: false };
 }

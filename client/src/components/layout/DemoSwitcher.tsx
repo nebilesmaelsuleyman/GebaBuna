@@ -10,8 +10,12 @@ export const DemoSwitcher: React.FC = () => {
   const router = useRouter();
 
   const handleSwitch = async (newRole: 'farmer' | 'buyer' | 'admin' | 'guest', targetPath: string) => {
-    await switchDemoRole(newRole);
-    router.push(targetPath);
+    try {
+      await switchDemoRole(newRole);
+      router.push(targetPath);
+    } catch (err: any) {
+      alert(err.message);
+    }
   };
 
   return (

@@ -11,6 +11,7 @@
 import { MarketPrice, CoffeeGrade, ProcessingType } from '../models/MarketPrice';
 import { PriceFairnessStatus } from '../models/Listing';
 import { getLiveMarketReferencePrice } from './ecxPriceService';
+import { FLOOR_RATIO, PRICE_SOURCE_NOTE } from '../constants/coffeePrices';
 
 export interface PriceFairnessAnalysis {
   marketPrice: number;
@@ -58,7 +59,7 @@ export function evaluatePriceFairness(
     status = 'very_low';
     label = 'Very Low (Predatory)';
     adviceMessage = `Warning: This is ${Math.abs(diff)} ETB/kg below market benchmark (${roundedPercentage}% of ECX value). Do not undersell!`;
-  } else if (percentage < 90) {
+  } else if (percentage < FLOOR_RATIO * 100) {
     status = 'low';
     label = 'Below Market';
     adviceMessage = `Notice: This is ${Math.abs(diff)} ETB/kg below the current ECX reference rate (${roundedPercentage}% of ECX value). Consider asking for a higher price.`;
@@ -75,8 +76,8 @@ export function evaluatePriceFairness(
     status,
     label,
     adviceMessage,
-    source: 'ECX',
-    isLive: true,
+    source: PRICE_SOURCE_NOTE,
+    isLive: false,
   };
 }
 

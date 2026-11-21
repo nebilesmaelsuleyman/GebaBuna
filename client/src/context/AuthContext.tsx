@@ -1,8 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User, Role } from '../types';
-import { api } from '../services/api';
+import { api, SESSION_EXPIRED_EVENT } from '../services/api';
 
 interface AuthContextType {
   user: User | null;
@@ -13,50 +13,18 @@ interface AuthContextType {
   otpLogin: (phone: string, code: string) => Promise<boolean>;
   register: (payload: Record<string, any>) => Promise<boolean>;
   logout: () => void;
+  /** Signs in with a seeded demo account. Throws with a readable message on failure. */
   switchDemoRole: (role: Role | 'guest') => Promise<void>;
   updateUser: (updates: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Demo Pre-configured accounts seeded in the backend
-export const DEMO_ACCOUNTS = {
-  farmer: {
-    identifier: '0917112233',
-    password: 'farmer123456',
-    mockUser: {
-      id: 'f-gemechu-1',
-      fullName: 'Gemechu Daba (Mana Woreda)',
-      phone: '+251 917 112 233',
-      email: 'gemechu@buna.et',
-      role: 'farmer' as Role,
-      preferredLanguage: 'om' as const,
-    },
-  },
-  buyer: {
-    identifier: 'dejene@oromia-union.com',
-    password: 'buyer123456',
-    mockUser: {
-      id: 'b-oromia-1',
-      fullName: 'Dejene Dadi (Oromia Union)',
-      phone: '+251 911 223 344',
-      email: 'dejene@oromia-union.com',
-      role: 'buyer' as Role,
-      preferredLanguage: 'om' as const,
-    },
-  },
-  admin: {
-    identifier: 'admin@jimma-agri.gov.et',
-    password: 'admin123456',
-    mockUser: {
-      id: 'a-bureau-1',
-      fullName: 'Ato Bekele Tolera (Jimma Agri Bureau)',
-      phone: '+251 917 000 111',
-      email: 'admin@jimma-agri.gov.et',
-      role: 'admin' as Role,
-      preferredLanguage: 'om' as const,
-    },
-  },
+// Real accounts created by `npm run seed` in /server
+export const DEMO_ACCOUNTS: Record<Role, { identifier: string; password: string }> = {
+  farmer: { identifier: '0917112233', password: 'farmer123456' },
+  buyer: { identifier: 'dejene@oromia-union.com', password: 'buyer123456' },
+  admin: { identifier: 'admin@jimma-agri.gov.et', password: 'admin123456' },
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -64,29 +32,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  const logout = useCallback(() => {
+    setUser(null);
+    setToken(null);
+    localStorage.removeItem('buna_token');
+    localStorage.removeItem('buna_user');
+  }, []);
+
   useEffect(() => {
-    // Check saved token or set default guest/farmer
     const savedToken = localStorage.getItem('buna_token');
     const savedUser = localStorage.getItem('buna_user');
 
-    if (savedToken && savedUser) {
+    // Old builds stored fake "demo_token_*" sessions that the API always rejects
+    if (savedToken && savedUser && !savedToken.startsWith('demo_token')) {
       try {
         setToken(savedToken);
         setUser(JSON.parse(savedUser));
       } catch {
-        localStorage.removeItem('buna_token');
-        localStorage.removeItem('buna_user');
+        logout();
       }
     } else {
-      // Default initial view for smooth demo: Gemechu Farmer
-      const defaultDemo = DEMO_ACCOUNTS.farmer.mockUser;
-      setUser(defaultDemo);
-      setToken('demo_token_farmer');
-      localStorage.setItem('buna_user', JSON.stringify(defaultDemo));
-      localStorage.setItem('buna_token', 'demo_token_farmer');
+      logout();
     }
     setIsLoading(false);
-  }, []);
+
+    window.addEventListener(SESSION_EXPIRED_EVENT, logout);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, logout);
+  }, [logout]);
 
   const applySession = (nextToken: string, nextUser: User) => {
     setToken(nextToken);
@@ -104,13 +76,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return false;
     } catch {
-      // Check if it matches demo accounts
-      for (const [key, demo] of Object.entries(DEMO_ACCOUNTS)) {
-        if (identifier === demo.identifier && password === demo.password) {
-          applySession(`demo_token_${key}`, demo.mockUser);
-          return true;
-        }
-      }
       return false;
     }
   };
@@ -141,13 +106,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    setToken(null);
-    localStorage.removeItem('buna_token');
-    localStorage.removeItem('buna_user');
-  };
-
   const updateUser = (updates: Partial<User>) => {
     setUser((current) => {
       if (!current) return current;
@@ -164,19 +122,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const demo = DEMO_ACCOUNTS[targetRole];
-    if (demo) {
-      try {
-        // Try real login against local backend if available
-        const res = await api.login(demo.identifier, demo.password);
-        if (res.success) {
-          applySession(res.token, res.user);
-          return;
-        }
-      } catch {
-        // Fallback to preloaded mock demo user
-      }
-      applySession(`demo_token_${targetRole}`, demo.mockUser);
+    let res;
+    try {
+      res = await api.login(demo.identifier, demo.password);
+    } catch (err: any) {
+      throw new Error(
+        err?.offline
+          ? err.message
+          : `Demo login failed: ${err?.message || 'unknown error'}. Run "npm run seed" in /server to create the demo accounts.`
+      );
     }
+    if (!res.success || !res.token) {
+      throw new Error('Demo login failed. Run "npm run seed" in /server to create the demo accounts.');
+    }
+    applySession(res.token, res.user);
   };
 
   return (

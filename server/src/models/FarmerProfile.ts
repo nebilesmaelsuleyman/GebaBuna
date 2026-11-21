@@ -27,6 +27,15 @@ export interface IFarmerProfile extends Document {
   averageRatingFromBuyers: number; // 1.0 - 5.0
   totalRatingPoints: number;
   ratingCount: number;
+  rankingBreakdown?: {
+    gradeFidelity: number;
+    gradeLevel: number;
+    buyerRating: number;
+    onTimeDelivery: number;
+    moistureCompliance: number;
+    trackRecord: number;
+    total: number;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -141,6 +150,15 @@ const FarmerProfileSchema = new Schema<IFarmerProfile>(
     ratingCount: {
       type: Number,
       default: 1,
+    },
+    rankingBreakdown: {
+      gradeFidelity: { type: Number, default: 70 },
+      gradeLevel: { type: Number, default: 70 },
+      buyerRating: { type: Number, default: 70 },
+      onTimeDelivery: { type: Number, default: 70 },
+      moistureCompliance: { type: Number, default: 70 },
+      trackRecord: { type: Number, default: 0 },
+      total: { type: Number, default: 70 },
     },
   },
   {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import NextLink from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
@@ -13,8 +13,6 @@ import {
   User,
   ShieldCheck,
   LogOut,
-  Menu,
-  X,
   Send,
 } from 'lucide-react';
 
@@ -22,7 +20,6 @@ export const Navbar: React.FC = () => {
   const { user, role, logout } = useAuth();
   const { language, setLanguage, t } = useLanguage();
   const pathname = usePathname();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navLinks = [
     { href: '/', label: t('navHome'), icon: Coffee },
@@ -63,32 +60,13 @@ export const Navbar: React.FC = () => {
                   ? 'Gatii Bunaa Qajeelaa'
                   : language === 'am'
                   ? 'ቡና ትክክለኛ ዋጋ'
-                  : 'የቡና ትክክለኛ ዋጋ'}
+                  : 'Fair price for Jimma coffee'}
               </span>
             </div>
           </NextLink>
 
-          <nav className="hidden items-center gap-1 xl:flex">
-            {navLinks.map((link) => {
-              const isActive = pathname === link.href;
-              return (
-                <NextLink
-                  key={link.href}
-                  href={link.href}
-                  className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
-                    isActive
-                      ? 'bg-coffee-950 text-cream-50'
-                      : 'text-coffee-700 hover:bg-coffee-100 hover:text-coffee-950'
-                  }`}
-                >
-                  {link.label}
-                </NextLink>
-              );
-            })}
-          </nav>
-
           <div className="flex shrink-0 items-center gap-2">
-            <div className="hidden items-center rounded-full border border-coffee-200 bg-white/70 p-0.5 text-[11px] font-bold sm:flex">
+            <div className="flex items-center rounded-full border border-coffee-200 bg-white/70 p-0.5 text-[11px] font-bold">
               {languages.map((l) => (
                 <button
                   key={l.code}
@@ -105,10 +83,10 @@ export const Navbar: React.FC = () => {
             </div>
 
             <a
-              href="https://t.me/BunaFairPriceBot"
+              href="https://t.me/bunajimmabot"
               target="_blank"
               rel="noreferrer"
-              className="hidden items-center gap-2 rounded-full bg-cherry-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-cherry-500 sm:inline-flex"
+              className="hidden items-center gap-2 rounded-full bg-cherry-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-cherry-500 lg:inline-flex"
             >
               <Send className="h-3.5 w-3.5" />
               Open Telegram Bot
@@ -138,69 +116,35 @@ export const Navbar: React.FC = () => {
             ) : (
               <NextLink
                 href="/login"
-                title="Sign In"
-                className="hidden h-8 w-8 items-center justify-center rounded-full border border-coffee-200 bg-white text-coffee-700 transition-colors hover:border-coffee-400 md:flex"
+                className="hidden items-center gap-1.5 rounded-full border border-coffee-200 bg-white px-3.5 py-2 text-xs font-bold text-coffee-900 transition-colors hover:border-coffee-400 sm:inline-flex"
               >
-                <User className="h-4 w-4" />
+                <User className="h-3.5 w-3.5" />
+                Sign in
               </NextLink>
             )}
-
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="rounded-full border border-coffee-200 bg-white p-2 text-coffee-800 xl:hidden"
-            >
-              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
           </div>
         </div>
 
-        {mobileMenuOpen && (
-          <div className="space-y-1 border-t border-coffee-200 bg-cream-50 px-4 pb-5 pt-3 xl:hidden">
-            {navLinks.map((link) => {
-              const Icon = link.icon;
-              const isActive = pathname === link.href;
-              return (
-                <NextLink
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold ${
-                    isActive ? 'bg-coffee-950 text-cream-50' : 'text-coffee-800 hover:bg-coffee-100'
-                  }`}
-                >
-                  <Icon className={`h-4 w-4 ${isActive ? 'text-gold-300' : 'text-cherry-600'}`} />
-                  {link.label}
-                </NextLink>
-              );
-            })}
-            <div className="mt-2 flex items-center justify-between border-t border-coffee-200 pt-3">
-              <div className="flex gap-1.5">
-                {languages.map((l) => (
-                  <button
-                    key={l.code}
-                    onClick={() => setLanguage(l.code as 'en' | 'am' | 'om')}
-                    className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                      language === l.code
-                        ? 'bg-coffee-950 text-gold-300'
-                        : 'bg-coffee-100 text-coffee-700'
-                    }`}
-                  >
-                    {l.label}
-                  </button>
-                ))}
-              </div>
-              <a
-                href="https://t.me/BunaFairPriceBot"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-full bg-cherry-600 px-3 py-1.5 text-xs font-bold text-white"
+        <nav className="mx-auto flex max-w-[1440px] gap-1 overflow-x-auto px-4 pb-2.5 md:px-10">
+          {navLinks.map((link) => {
+            const Icon = link.icon;
+            const isActive = pathname === link.href;
+            return (
+              <NextLink
+                key={link.href}
+                href={link.href}
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors ${
+                  isActive
+                    ? 'bg-coffee-950 text-cream-50'
+                    : 'text-coffee-800 hover:bg-coffee-100'
+                }`}
               >
-                <Send className="h-3 w-3" />
-                Telegram Bot
-              </a>
-            </div>
-          </div>
-        )}
+                <Icon className={`h-3.5 w-3.5 ${isActive ? 'text-gold-300' : 'text-cherry-700'}`} />
+                {link.label}
+              </NextLink>
+            );
+          })}
+        </nav>
       </div>
     </header>
   );

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
 import { MarketPrice } from '../../types';
+import { REFERENCE_PRICES, floorFor, formatGrade } from '../../utils/coffeePrices';
 import { useLanguage } from '../../context/LanguageContext';
 import {
   TrendingUp,
@@ -34,16 +35,16 @@ export default function MarketPricesPage() {
   const [selectedGrade, setSelectedGrade] = useState<string>('Grade 1');
   const [selectedProcessing, setSelectedProcessing] = useState<'washed' | 'natural'>('washed');
   const [calcQuantity, setCalcQuantity] = useState<number>(2000);
-  const [calcPricePerKg, setCalcPricePerKg] = useState<number>(410);
+  const [calcPricePerKg, setCalcPricePerKg] = useState<number>(1150);
 
   // Dynamic Chart Data for selected Grade & Processing
   const [chartData, setChartData] = useState<any[]>([
-    { date: '16 Oct', marketPrice: 380, floorPrice: 360, internationalRef: 395 },
-    { date: '23 Oct', marketPrice: 388, floorPrice: 370, internationalRef: 405 },
-    { date: '30 Oct', marketPrice: 395, floorPrice: 375, internationalRef: 412 },
-    { date: '06 Nov', marketPrice: 402, floorPrice: 385, internationalRef: 420 },
-    { date: '13 Nov', marketPrice: 410, floorPrice: 390, internationalRef: 430 },
-    { date: 'Today', marketPrice: 415, floorPrice: 395, internationalRef: 435 },
+    { date: '16 Oct', marketPrice: 1080, floorPrice: 1005, internationalRef: 1255 },
+    { date: '23 Oct', marketPrice: 1100, floorPrice: 1025, internationalRef: 1270 },
+    { date: '30 Oct', marketPrice: 1115, floorPrice: 1035, internationalRef: 1285 },
+    { date: '06 Nov', marketPrice: 1130, floorPrice: 1050, internationalRef: 1295 },
+    { date: '13 Nov', marketPrice: 1140, floorPrice: 1060, internationalRef: 1300 },
+    { date: 'Today', marketPrice: 1150, floorPrice: 1070, internationalRef: 1300 },
   ]);
 
   useEffect(() => {
@@ -74,12 +75,12 @@ export default function MarketPricesPage() {
     // Adjust chart trajectory dynamically based on grade
     const base = price - 35;
     setChartData([
-      { date: '16 Oct', marketPrice: base, floorPrice: base - 20, internationalRef: base + 15 },
-      { date: '23 Oct', marketPrice: base + 8, floorPrice: base - 10, internationalRef: base + 22 },
-      { date: '30 Oct', marketPrice: base + 16, floorPrice: base - 5, internationalRef: base + 30 },
-      { date: '06 Nov', marketPrice: base + 24, floorPrice: base + 5, internationalRef: base + 36 },
-      { date: '13 Nov', marketPrice: price - 5, floorPrice: price - 20, internationalRef: price + 15 },
-      { date: 'Today', marketPrice: price, floorPrice: price - 20, internationalRef: price + 20 },
+      { date: '16 Oct', marketPrice: base, floorPrice: floorFor(base), internationalRef: Math.round(base * 1.13) },
+      { date: '23 Oct', marketPrice: base + 20, floorPrice: floorFor(base + 20), internationalRef: Math.round((base + 20) * 1.13) },
+      { date: '30 Oct', marketPrice: base + 35, floorPrice: floorFor(base + 35), internationalRef: Math.round((base + 35) * 1.13) },
+      { date: '06 Nov', marketPrice: base + 50, floorPrice: floorFor(base + 50), internationalRef: Math.round((base + 50) * 1.13) },
+      { date: '13 Nov', marketPrice: price - 10, floorPrice: floorFor(price - 10), internationalRef: Math.round((price - 10) * 1.13) },
+      { date: 'Today', marketPrice: price, floorPrice: floorFor(price), internationalRef: Math.round(price * 1.13) },
     ]);
   };
 
@@ -89,24 +90,24 @@ export default function MarketPricesPage() {
       <div className="space-y-2">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-coffee-100 text-coffee-800 text-xs font-semibold">
           <TrendingUp className="w-3.5 h-3.5 text-coffee-700" />
-          <span>Official Jimma ECX Floor Benchmarks</span>
+          <span>Estimated 2025/26 Jimma prices</span>
         </div>
         <h1 className="text-3xl font-extrabold text-coffee-950 sm:text-4xl tracking-tight">
-          Ethiopian Commodity Exchange (ECX) Price Transparency
+          Jimma Coffee Price Board
         </h1>
         <p className="text-sm text-coffee-700 max-w-3xl leading-relaxed">
-          Daily closing floor prices, ceiling benchmarks, and 30-day historical trends for Jimma highland Arabica coffee. Farmers are legally protected from selling below the official floor benchmark.
+          Estimated fair prices, protection floors, and ceilings for Jimma green coffee, derived from ECTA minimum export prices, Jimma FOB ranges, and farm-gate cherry prices (1 USD ≈ 155 ETB). Buyers on Buna cannot bid below the floor.
         </p>
       </div>
 
       {/* Grade Selector Tabs */}
       <div className="flex flex-wrap gap-2 pb-2 border-b border-coffee-200">
         {[
-          { label: 'Specialty Washed', grade: 'Specialty', processing: 'washed', price: 450 },
-          { label: 'Grade 1 Washed', grade: 'Grade 1', processing: 'washed', price: 410 },
-          { label: 'Grade 1 Natural', grade: 'Grade 1', processing: 'natural', price: 385 },
-          { label: 'Grade 2 Washed', grade: 'Grade 2', processing: 'washed', price: 370 },
-          { label: 'Grade 3 Washed', grade: 'Grade 3', processing: 'washed', price: 320 },
+          { label: 'Washed Specialty', grade: 'Specialty', processing: 'washed', price: REFERENCE_PRICES.washed.Specialty.current },
+          { label: 'Washed G1', grade: 'Grade 1', processing: 'washed', price: REFERENCE_PRICES.washed['Grade 1'].current },
+          { label: 'Natural G1', grade: 'Grade 1', processing: 'natural', price: REFERENCE_PRICES.natural['Grade 1'].current },
+          { label: 'Washed G2', grade: 'Grade 2', processing: 'washed', price: REFERENCE_PRICES.washed['Grade 2'].current },
+          { label: 'Washed G3', grade: 'Grade 3', processing: 'washed', price: REFERENCE_PRICES.washed['Grade 3'].current },
         ].map((item) => {
           const isSelected =
             selectedGrade === item.grade && selectedProcessing === item.processing;
@@ -136,7 +137,7 @@ export default function MarketPricesPage() {
                 30-Day Price Movement: Jimma {selectedProcessing} {selectedGrade}
               </h2>
               <span className="text-xs text-coffee-500">
-                Daily closing prices at Jimma ECX Terminal (ETB / Kilogram)
+                Estimated reference prices (ETB / kg, green coffee)
               </span>
             </div>
             <div className="flex items-center gap-3 text-xs">
@@ -144,7 +145,7 @@ export default function MarketPricesPage() {
                 <span className="w-2.5 h-2.5 rounded-full bg-forest-600 inline-block" /> Market Price
               </span>
               <span className="flex items-center gap-1.5 text-amber-700 font-bold">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> ECX Floor
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> Protection floor
               </span>
               <span className="flex items-center gap-1.5 text-blue-700 font-bold hidden sm:flex">
                 <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" /> Export Parity
@@ -188,7 +189,7 @@ export default function MarketPricesPage() {
                   stroke="#d4a849"
                   strokeWidth={2}
                   strokeDasharray="5 5"
-                  name="ECX Statutory Floor"
+                  name="Protection floor"
                 />
                 <Line
                   type="monotone"
@@ -208,11 +209,19 @@ export default function MarketPricesPage() {
             </div>
             <div>
               <span className="text-coffee-600 block">Statutory Floor</span>
-              <span className="text-base font-extrabold text-amber-700">{calcPricePerKg - 20} ETB/kg</span>
+              <span className="text-base font-extrabold text-amber-700">{floorFor(calcPricePerKg)} ETB/kg</span>
             </div>
             <div>
-              <span className="text-coffee-600 block">30-Day Growth</span>
-              <span className="text-base font-extrabold text-forest-600">+8.5% ↗</span>
+              <span className="text-coffee-600 block">5-Week Trend (est.)</span>
+              <span className="text-base font-extrabold text-forest-600">
+                {(() => {
+                  const first = chartData[0]?.marketPrice;
+                  const last = chartData[chartData.length - 1]?.marketPrice;
+                  if (!first || !last) return '—';
+                  const pct = Math.round(((last - first) / first) * 1000) / 10;
+                  return `${pct > 0 ? '+' : ''}${pct}%`;
+                })()}
+              </span>
             </div>
           </div>
         </div>
@@ -270,7 +279,7 @@ export default function MarketPricesPage() {
               <div className="flex justify-between text-coffee-700">
                 <span>Minimum Protected Floor:</span>
                 <span className="font-bold text-amber-800">
-                  {(calcQuantity * (calcPricePerKg - 20)).toLocaleString()} ETB
+                  {(calcQuantity * floorFor(calcPricePerKg)).toLocaleString()} ETB
                 </span>
               </div>
               <div className="pt-2 border-t border-forest-200 flex justify-between items-baseline">
@@ -285,7 +294,7 @@ export default function MarketPricesPage() {
               <ShieldCheck className="w-4 h-4 text-forest-700 flex-shrink-0 mt-0.5" />
               <span>
                 Verified buyers on this platform are prohibited from bidding below the protected minimum of{' '}
-                <strong className="text-coffee-950">{calcPricePerKg - 20} ETB/kg</strong>.
+                <strong className="text-coffee-950">{floorFor(calcPricePerKg)} ETB/kg</strong>.
               </span>
             </div>
           </div>
@@ -297,7 +306,7 @@ export default function MarketPricesPage() {
         <div className="px-6 py-4 border-b border-coffee-100 flex items-center justify-between">
           <div>
             <h3 className="font-bold text-coffee-950 text-base">
-              Complete Jimma Terminal Price Board
+              All grades · estimated 2025/26
             </h3>
             <span className="text-xs text-coffee-600">
               Updated daily via Ethiopian Commodity Exchange (Jimma Branch)
@@ -330,7 +339,7 @@ export default function MarketPricesPage() {
                       {p.processing}
                     </span>
                   </td>
-                  <td className="py-4 px-6 font-semibold">{p.grade}</td>
+                  <td className="py-4 px-6 font-semibold">{formatGrade(p.processing, p.grade)}</td>
                   <td className="py-4 px-6 font-bold text-amber-700">
                     {p.floorPricePerKgETB} ETB/kg
                   </td>

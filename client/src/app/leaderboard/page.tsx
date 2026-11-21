@@ -16,6 +16,16 @@ import {
   Filter,
 } from 'lucide-react';
 
+// Mirrors FARMER_RANKING_WEIGHTS in server/src/services/scoringService.ts
+const RANKING_CRITERIA = [
+  { key: 'gradeFidelity', label: 'Grade fidelity', weight: 30, detail: 'Delivered grade matches the grade promised, verified by the buyer' },
+  { key: 'gradeLevel', label: 'ECX grade level', weight: 20, detail: 'Average ECX grade of the farmer’s lots (Specialty/G1 highest)' },
+  { key: 'buyerRating', label: 'Buyer rating', weight: 20, detail: 'Average 1–5 star rating from buyers' },
+  { key: 'onTimeDelivery', label: 'On-time delivery', weight: 15, detail: 'Share of trades delivered on the agreed date' },
+  { key: 'moistureCompliance', label: 'Moisture ≤ 11.5%', weight: 10, detail: 'Share of lots within the ECX moisture limit' },
+  { key: 'trackRecord', label: 'Track record', weight: 5, detail: 'Completed trades (10 trades = full marks)' },
+] as const;
+
 export default function LeaderboardPage() {
   const [activeTab, setActiveTab] = useState<'farmers' | 'buyers'>('farmers');
   const [selectedWoreda, setSelectedWoreda] = useState<string>('all');
@@ -54,7 +64,7 @@ export default function LeaderboardPage() {
           Excellence & Ethical Trade Leaderboards
         </h1>
         <p className="text-sm text-coffee-600 max-w-2xl leading-relaxed">
-          Celebrating top quality Jimma coffee producers and recognizing commercial buyers who uphold fair prices above the statutory ECX floor.
+          Celebrating top quality Jimma coffee producers and recognizing commercial buyers who pay at or above the protection floor.
         </p>
       </div>
 
@@ -108,6 +118,27 @@ export default function LeaderboardPage() {
       {/* Farmers Leaderboard */}
       {activeTab === 'farmers' && (
         <div className="space-y-6">
+          <section className="surface p-5 sm:p-6">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold-700">How farmers are ranked</p>
+                <h2 className="mt-1 text-lg font-extrabold text-coffee-950">Rank score out of 100, based on ECX grading practice</h2>
+              </div>
+              <p className="text-xs text-coffee-500">New farmers start at 70 on buyer-reviewed criteria. Ties go to higher volume.</p>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {RANKING_CRITERIA.map((c) => (
+                <div key={c.key} className="rounded-xl border border-coffee-100 bg-coffee-50/60 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold text-coffee-950">{c.label}</span>
+                    <span className="rounded-full bg-coffee-950 px-2 py-0.5 text-[11px] font-bold text-gold-300">{c.weight}%</span>
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-coffee-600">{c.detail}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
           {/* Top 3 Podium Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {farmers.slice(0, 3).map((f, index) => {
@@ -141,8 +172,8 @@ export default function LeaderboardPage() {
 
                   <div className="grid grid-cols-2 gap-2 text-xs py-3 px-3.5 rounded-xl bg-coffee-50/70 border border-coffee-100">
                     <div>
-                      <span className="text-coffee-500 text-[10px] block">Cupping Score:</span>
-                      <strong className="text-forest-700 text-base font-extrabold">{f.qualityScore} pts</strong>
+                      <span className="text-coffee-500 text-[10px] block">Rank score:</span>
+                      <strong className="text-forest-700 text-base font-extrabold">{f.qualityScore} / 100</strong>
                     </div>
                     <div>
                       <span className="text-coffee-500 text-[10px] block">Volume Sold:</span>
@@ -151,6 +182,23 @@ export default function LeaderboardPage() {
                       </strong>
                     </div>
                   </div>
+
+                  {f.rankingBreakdown && (
+                    <div className="space-y-1.5">
+                      {RANKING_CRITERIA.map((c) => {
+                        const value = Number(f.rankingBreakdown?.[c.key] ?? 0);
+                        return (
+                          <div key={c.key} className="flex items-center gap-2 text-[11px] text-coffee-600">
+                            <span className="w-28 shrink-0">{c.label}</span>
+                            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-coffee-100">
+                              <div className="h-full rounded-full bg-forest-500" style={{ width: `${Math.min(100, value)}%` }} />
+                            </div>
+                            <span className="w-7 text-right font-semibold text-coffee-900">{value}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   <div className="flex justify-between items-center text-xs text-coffee-600">
                     <span>Trades: {f.completedTrades} Completed</span>
@@ -172,7 +220,7 @@ export default function LeaderboardPage() {
                     <th className="py-3 px-6">Rank</th>
                     <th className="py-3 px-6">Smallholder Farmer</th>
                     <th className="py-3 px-6">Woreda</th>
-                    <th className="py-3 px-6">Quality Cupping Score</th>
+                    <th className="py-3 px-6">Rank Score</th>
                     <th className="py-3 px-6">Volume Traded (Kg)</th>
                     <th className="py-3 px-6">Completed Trades</th>
                     <th className="py-3 px-6 text-right">Farmer Badge</th>
@@ -187,7 +235,7 @@ export default function LeaderboardPage() {
                         {farmer.fullName}
                       </td>
                       <td className="py-4 px-6">{farmer.woreda}</td>
-                      <td className="py-4 px-6 font-extrabold text-forest-700">{farmer.qualityScore} pts</td>
+                      <td className="py-4 px-6 font-extrabold text-forest-700">{farmer.qualityScore} / 100</td>
                       <td className="py-4 px-6 font-bold">{farmer.totalKgSold?.toLocaleString()} kg</td>
                       <td className="py-4 px-6 text-coffee-600">{farmer.completedTrades}</td>
                       <td className="py-4 px-6 text-right">
@@ -213,7 +261,7 @@ export default function LeaderboardPage() {
                 Regional Fair Buyer Certification Rankings
               </h3>
               <p className="text-xs text-coffee-600">
-                Audited by Jimma Zone Agriculture Bureau based on compliance with statutory floor benchmarks and prompt farmer payouts.
+                Audited by Jimma Zone Agriculture Bureau based on price fairness against reference prices and prompt farmer payouts.
               </p>
             </div>
           </div>
@@ -244,10 +292,10 @@ export default function LeaderboardPage() {
                     <td className="py-4 px-6 text-coffee-700">{buyer.ownerName}</td>
                     <td className="py-4 px-6">
                       <span className="text-base font-black text-forest-700">{buyer.fairnessScore}%</span>
-                      <span className="text-[10px] text-forest-600 block">Above Statutory Floor</span>
+                      <span className="text-[10px] text-forest-600 block">Price fairness index</span>
                     </td>
                     <td className="py-4 px-6 font-bold">{buyer.totalKgBought?.toLocaleString()} kg</td>
-                    <td className="py-4 px-6 text-coffee-600">{buyer.numberCompletedTrades}</td>
+                    <td className="py-4 px-6 text-coffee-600">{buyer.completedTrades}</td>
                     <td className="py-4 px-6 text-right">
                       <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-forest-100 text-forest-800 border border-forest-300">
                         <CheckCircle2 className="w-3.5 h-3.5 text-forest-600" />

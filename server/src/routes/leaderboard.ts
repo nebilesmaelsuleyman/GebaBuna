@@ -1,8 +1,23 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { FarmerProfile } from '../models/FarmerProfile';
 import { BuyerProfile } from '../models/BuyerProfile';
+import { FARMER_RANKING_WEIGHTS } from '../services/scoringService';
 
 const router = Router();
+
+/**
+ * GET /api/v1/leaderboard/criteria
+ * Public explanation of how farmers are ranked
+ */
+router.get('/criteria', (_req: Request, res: Response) => {
+  res.json({
+    success: true,
+    data: {
+      weights: FARMER_RANKING_WEIGHTS,
+      notes: 'ECX grade midpoints: Specialty 95, G1 93, G2 85, G3 75, G4 66, G5 60. Moisture limit 11.5%. New farmers start at 70 on buyer-dependent criteria.',
+    },
+  });
+});
 
 /**
  * GET /api/v1/leaderboard/farmers
@@ -38,6 +53,7 @@ router.get('/farmers', async (req: Request, res: Response, next: NextFunction): 
       coffeeVarieties: f.coffeeVarieties,
       processingMethods: f.processingMethods,
       qualityScore: f.averageQualityScore,
+      rankingBreakdown: f.rankingBreakdown,
       totalKgSold: f.totalKgSold,
       completedTrades: f.numberCompletedTrades,
       averageRating: f.averageRatingFromBuyers,

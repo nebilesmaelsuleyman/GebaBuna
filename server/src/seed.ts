@@ -11,7 +11,9 @@ import { Trade } from './models/Trade';
 import { Review } from './models/Review';
 import { Notification } from './models/Notification';
 import { VerificationLog } from './models/VerificationLog';
-import { refreshFarmerRanks, refreshBuyerRanks } from './services/scoringService';
+import { AdminAuditLog } from './models/AdminAuditLog';
+import { recalculateAllFarmerScores, refreshBuyerRanks } from './services/scoringService';
+import { REFERENCE_PRICES, PRICE_SOURCE_NOTE, buildHistory } from './constants/coffeePrices';
 
 async function seed() {
   console.log('🌱 [Seed] Starting Buna Fair Price database seed...');
@@ -29,6 +31,7 @@ async function seed() {
     Review.deleteMany({}),
     Notification.deleteMany({}),
     VerificationLog.deleteMany({}),
+    AdminAuditLog.deleteMany({}),
   ]);
 
   console.log('🧹 Cleaned existing database collections.');
@@ -38,182 +41,26 @@ async function seed() {
   const buyerPassword = await bcrypt.hash('buyer123456', 10);
   const adminPassword = await bcrypt.hash('admin123456', 10);
 
-  // 1. Seed Market Prices (ECX Benchmarks - Sample Data)
+  // 1. Seed Market Prices (estimated 2025/26 Jimma prices)
   console.log('📊 Seeding ECX reference market prices (clearly labeled sample data)...');
-  const marketPriceDocs = await MarketPrice.insertMany([
-    {
-      coffeeType: 'Jimma Washed Specialty',
-      processing: 'washed',
-      grade: 'Specialty',
-      currentPricePerKgETB: 450,
-      floorPricePerKgETB: 430,
-      ceilingPricePerKgETB: 480,
-      source: 'ECX Daily Coffee Floor Benchmark (Jimma Terminal) - Sample Data',
-      history: [
-        { date: new Date(Date.now() - 30 * 86400000), pricePerKgETB: 410 },
-        { date: new Date(Date.now() - 20 * 86400000), pricePerKgETB: 425 },
-        { date: new Date(Date.now() - 10 * 86400000), pricePerKgETB: 440 },
-        { date: new Date(), pricePerKgETB: 450 },
-      ],
-    },
-    {
-      coffeeType: 'Jimma Washed Grade 1',
-      processing: 'washed',
-      grade: 'Grade 1',
-      currentPricePerKgETB: 410,
-      floorPricePerKgETB: 390,
-      ceilingPricePerKgETB: 435,
-      source: 'ECX Daily Coffee Floor Benchmark (Jimma Terminal) - Sample Data',
-      history: [
-        { date: new Date(Date.now() - 30 * 86400000), pricePerKgETB: 375 },
-        { date: new Date(Date.now() - 20 * 86400000), pricePerKgETB: 390 },
-        { date: new Date(Date.now() - 10 * 86400000), pricePerKgETB: 400 },
-        { date: new Date(), pricePerKgETB: 410 },
-      ],
-    },
-    {
-      coffeeType: 'Jimma Washed Grade 2',
-      processing: 'washed',
-      grade: 'Grade 2',
-      currentPricePerKgETB: 370,
-      floorPricePerKgETB: 350,
-      ceilingPricePerKgETB: 390,
-      source: 'ECX Daily Coffee Floor Benchmark (Jimma Terminal) - Sample Data',
-      history: [
-        { date: new Date(Date.now() - 30 * 86400000), pricePerKgETB: 340 },
-        { date: new Date(Date.now() - 20 * 86400000), pricePerKgETB: 355 },
-        { date: new Date(Date.now() - 10 * 86400000), pricePerKgETB: 365 },
-        { date: new Date(), pricePerKgETB: 370 },
-      ],
-    },
-    {
-      coffeeType: 'Jimma Washed Grade 3',
-      processing: 'washed',
-      grade: 'Grade 3',
-      currentPricePerKgETB: 320,
-      floorPricePerKgETB: 300,
-      ceilingPricePerKgETB: 340,
-      source: 'ECX Daily Coffee Floor Benchmark (Jimma Terminal) - Sample Data',
-      history: [
-        { date: new Date(Date.now() - 30 * 86400000), pricePerKgETB: 295 },
-        { date: new Date(Date.now() - 20 * 86400000), pricePerKgETB: 305 },
-        { date: new Date(Date.now() - 10 * 86400000), pricePerKgETB: 315 },
-        { date: new Date(), pricePerKgETB: 320 },
-      ],
-    },
-    {
-      coffeeType: 'Jimma Washed Grade 4',
-      processing: 'washed',
-      grade: 'Grade 4',
-      currentPricePerKgETB: 280,
-      floorPricePerKgETB: 260,
-      ceilingPricePerKgETB: 300,
-      source: 'ECX Daily Coffee Floor Benchmark (Jimma Terminal) - Sample Data',
-      history: [
-        { date: new Date(Date.now() - 30 * 86400000), pricePerKgETB: 260 },
-        { date: new Date(Date.now() - 15 * 86400000), pricePerKgETB: 270 },
-        { date: new Date(), pricePerKgETB: 280 },
-      ],
-    },
-    {
-      coffeeType: 'Jimma Washed Grade 5',
-      processing: 'washed',
-      grade: 'Grade 5',
-      currentPricePerKgETB: 240,
-      floorPricePerKgETB: 220,
-      ceilingPricePerKgETB: 260,
-      source: 'ECX Daily Coffee Floor Benchmark (Jimma Terminal) - Sample Data',
-      history: [
-        { date: new Date(Date.now() - 30 * 86400000), pricePerKgETB: 225 },
-        { date: new Date(), pricePerKgETB: 240 },
-      ],
-    },
-    {
-      coffeeType: 'Jimma Natural Specialty',
-      processing: 'natural',
-      grade: 'Specialty',
-      currentPricePerKgETB: 420,
-      floorPricePerKgETB: 400,
-      ceilingPricePerKgETB: 450,
-      source: 'ECX Daily Coffee Floor Benchmark (Jimma Terminal) - Sample Data',
-      history: [
-        { date: new Date(Date.now() - 30 * 86400000), pricePerKgETB: 385 },
-        { date: new Date(Date.now() - 20 * 86400000), pricePerKgETB: 400 },
-        { date: new Date(Date.now() - 10 * 86400000), pricePerKgETB: 410 },
-        { date: new Date(), pricePerKgETB: 420 },
-      ],
-    },
-    {
-      coffeeType: 'Jimma Natural Grade 1',
-      processing: 'natural',
-      grade: 'Grade 1',
-      currentPricePerKgETB: 380,
-      floorPricePerKgETB: 360,
-      ceilingPricePerKgETB: 400,
-      source: 'ECX Daily Coffee Floor Benchmark (Jimma Terminal) - Sample Data',
-      history: [
-        { date: new Date(Date.now() - 30 * 86400000), pricePerKgETB: 350 },
-        { date: new Date(Date.now() - 20 * 86400000), pricePerKgETB: 365 },
-        { date: new Date(Date.now() - 10 * 86400000), pricePerKgETB: 375 },
-        { date: new Date(), pricePerKgETB: 380 },
-      ],
-    },
-    {
-      coffeeType: 'Jimma Natural Grade 2',
-      processing: 'natural',
-      grade: 'Grade 2',
-      currentPricePerKgETB: 340,
-      floorPricePerKgETB: 320,
-      ceilingPricePerKgETB: 360,
-      source: 'ECX Daily Coffee Floor Benchmark (Jimma Terminal) - Sample Data',
-      history: [
-        { date: new Date(Date.now() - 30 * 86400000), pricePerKgETB: 310 },
-        { date: new Date(Date.now() - 20 * 86400000), pricePerKgETB: 325 },
-        { date: new Date(Date.now() - 10 * 86400000), pricePerKgETB: 335 },
-        { date: new Date(), pricePerKgETB: 340 },
-      ],
-    },
-    {
-      coffeeType: 'Jimma Natural Grade 3',
-      processing: 'natural',
-      grade: 'Grade 3',
-      currentPricePerKgETB: 295,
-      floorPricePerKgETB: 275,
-      ceilingPricePerKgETB: 315,
-      source: 'ECX Daily Coffee Floor Benchmark (Jimma Terminal) - Sample Data',
-      history: [
-        { date: new Date(Date.now() - 30 * 86400000), pricePerKgETB: 270 },
-        { date: new Date(Date.now() - 15 * 86400000), pricePerKgETB: 285 },
-        { date: new Date(), pricePerKgETB: 295 },
-      ],
-    },
-    {
-      coffeeType: 'Jimma Natural Grade 4',
-      processing: 'natural',
-      grade: 'Grade 4',
-      currentPricePerKgETB: 255,
-      floorPricePerKgETB: 235,
-      ceilingPricePerKgETB: 275,
-      source: 'ECX Daily Coffee Floor Benchmark (Jimma Terminal) - Sample Data',
-      history: [
-        { date: new Date(Date.now() - 30 * 86400000), pricePerKgETB: 240 },
-        { date: new Date(), pricePerKgETB: 255 },
-      ],
-    },
-    {
-      coffeeType: 'Jimma Natural Grade 5',
-      processing: 'natural',
-      grade: 'Grade 5',
-      currentPricePerKgETB: 220,
-      floorPricePerKgETB: 200,
-      ceilingPricePerKgETB: 240,
-      source: 'ECX Daily Coffee Floor Benchmark (Jimma Terminal) - Sample Data',
-      history: [
-        { date: new Date(Date.now() - 30 * 86400000), pricePerKgETB: 210 },
-        { date: new Date(), pricePerKgETB: 220 },
-      ],
-    },
-  ]);
+  const gradeOrder = ['Specialty', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5'] as const;
+  const marketPriceDocs = await MarketPrice.insertMany(
+    (['washed', 'natural'] as const).flatMap((processing) =>
+      gradeOrder.map((grade) => {
+        const price = REFERENCE_PRICES[processing][grade];
+        return {
+          coffeeType: `Jimma ${processing === 'washed' ? 'Washed' : 'Natural'} ${grade.replace('Grade ', 'G')}`,
+          processing,
+          grade,
+          currentPricePerKgETB: price.current,
+          floorPricePerKgETB: price.floor,
+          ceilingPricePerKgETB: price.ceiling,
+          source: PRICE_SOURCE_NOTE,
+          history: buildHistory(price.current),
+        };
+      })
+    )
+  );
 
   // 2. Seed Admin User
   console.log('👤 Seeding Regional Agriculture Bureau Admin...');
@@ -527,7 +374,7 @@ async function seed() {
       processing: 'washed',
       grade: 'Grade 1',
       quantityKg: 2500,
-      askingPrice: 420, // ref 410 -> Fair
+      askingPrice: 1180, // ref 1150 -> Fair
       woreda: 'Mana',
       kebele: 'Kenteri',
       moisture: 11.2,
@@ -543,7 +390,7 @@ async function seed() {
       processing: 'natural',
       grade: 'Grade 1',
       quantityKg: 1800,
-      askingPrice: 385, // ref 380 -> Fair
+      askingPrice: 1095, // ref 1080 -> Fair
       woreda: 'Mana',
       kebele: 'Kenteri',
       moisture: 11.6,
@@ -559,7 +406,7 @@ async function seed() {
       processing: 'washed',
       grade: 'Specialty',
       quantityKg: 1200,
-      askingPrice: 460, // ref 450 -> Fair
+      askingPrice: 1290, // ref 1260 -> Fair
       woreda: 'Gomma',
       kebele: 'Beshasha',
       moisture: 10.9,
@@ -571,11 +418,11 @@ async function seed() {
     },
     {
       farmerIdx: 1, // Chaltu (Gomma)
-      coffeeType: 'Beshasha Sun-Dried Natural Grade 2',
+      coffeeType: 'Beshasha Sun-Dried Natural G2',
       processing: 'natural',
       grade: 'Grade 2',
       quantityKg: 3000,
-      askingPrice: 345, // ref 340 -> Fair
+      askingPrice: 975, // ref 960 -> Fair
       woreda: 'Gomma',
       kebele: 'Beshasha',
       moisture: 11.8,
@@ -584,11 +431,11 @@ async function seed() {
     },
     {
       farmerIdx: 2, // Worku (Agaro)
-      coffeeType: 'Agaro Toba Washed Micro-Lot Grade 1',
+      coffeeType: 'Agaro Toba Washed Micro-Lot G1',
       processing: 'washed',
       grade: 'Grade 1',
       quantityKg: 3500,
-      askingPrice: 415, // ref 410 -> Fair
+      askingPrice: 1165, // ref 1150 -> Fair
       woreda: 'Agaro',
       kebele: 'Toba',
       moisture: 11.0,
@@ -600,11 +447,11 @@ async function seed() {
     },
     {
       farmerIdx: 2, // Worku (Agaro)
-      coffeeType: 'Agaro Mountain Natural Grade 3',
+      coffeeType: 'Agaro Mountain Natural G3',
       processing: 'natural',
       grade: 'Grade 3',
       quantityKg: 4000,
-      askingPrice: 300, // ref 295 -> Fair
+      askingPrice: 845, // ref 830 -> Fair
       woreda: 'Agaro',
       kebele: 'Toba',
       moisture: 12.0,
@@ -613,11 +460,11 @@ async function seed() {
     },
     {
       farmerIdx: 3, // Almaz (Limmu Kossa)
-      coffeeType: 'Limmu Kossa Organic Washed Grade 2',
+      coffeeType: 'Limmu Kossa Organic Washed G2',
       processing: 'washed',
       grade: 'Grade 2',
       quantityKg: 2800,
-      askingPrice: 375, // ref 370 -> Fair
+      askingPrice: 1055, // ref 1040 -> Fair
       woreda: 'Limmu Kossa',
       kebele: 'Babu',
       moisture: 11.4,
@@ -626,11 +473,11 @@ async function seed() {
     },
     {
       farmerIdx: 3, // Almaz (Limmu Kossa)
-      coffeeType: 'Limmu Babu Forest Natural Grade 2',
+      coffeeType: 'Limmu Babu Forest Natural G2',
       processing: 'natural',
       grade: 'Grade 2',
       quantityKg: 2200,
-      askingPrice: 340, // ref 340 -> Fair
+      askingPrice: 960, // ref 960 -> Fair
       woreda: 'Limmu Kossa',
       kebele: 'Babu',
       moisture: 11.5,
@@ -643,7 +490,7 @@ async function seed() {
       processing: 'washed',
       grade: 'Specialty',
       quantityKg: 1500,
-      askingPrice: 470, // ref 450 -> Fair
+      askingPrice: 1315, // ref 1260 -> Fair
       woreda: 'Gera',
       kebele: 'Choche',
       moisture: 10.8,
@@ -659,7 +506,7 @@ async function seed() {
       processing: 'natural',
       grade: 'Grade 1',
       quantityKg: 2000,
-      askingPrice: 385, // ref 380 -> Fair
+      askingPrice: 1095, // ref 1080 -> Fair
       woreda: 'Gera',
       kebele: 'Choche',
       moisture: 11.3,
@@ -668,11 +515,11 @@ async function seed() {
     },
     {
       farmerIdx: 5, // Dawit (Shebe)
-      coffeeType: 'Shebe Seka Valley Washed Grade 3',
+      coffeeType: 'Shebe Seka Valley Washed G3',
       processing: 'washed',
       grade: 'Grade 3',
       quantityKg: 3200,
-      askingPrice: 325, // ref 320 -> Fair
+      askingPrice: 915, // ref 900 -> Fair
       woreda: 'Shebe',
       kebele: 'Seka',
       moisture: 11.7,
@@ -685,20 +532,20 @@ async function seed() {
       processing: 'natural',
       grade: 'Grade 4',
       quantityKg: 1500,
-      askingPrice: 180, // ref 255 -> VERY LOW (Illustrates problem: farmer underselling)
+      askingPrice: 510, // ref 720 -> VERY LOW (Illustrates problem: farmer underselling)
       woreda: 'Shebe',
       kebele: 'Seka',
       moisture: 12.8,
       source: 'web',
-      desc: 'Local trader offered 170 ETB. Listed here to illustrate the low-price predatory warning badge.',
+      desc: 'Local trader offered 480 ETB/kg. Listed here to illustrate the low-price predatory warning badge.',
     },
     {
       farmerIdx: 0, // Gemechu (Mana)
-      coffeeType: 'Mana Doyo Washed Grade 2',
+      coffeeType: 'Mana Doyo Washed G2',
       processing: 'washed',
       grade: 'Grade 2',
       quantityKg: 1900,
-      askingPrice: 370,
+      askingPrice: 1040,
       woreda: 'Mana',
       kebele: 'Doyo',
       moisture: 11.1,
@@ -707,11 +554,11 @@ async function seed() {
     },
     {
       farmerIdx: 1, // Chaltu (Gomma)
-      coffeeType: 'Gomma Kilole Natural Grade 4',
+      coffeeType: 'Gomma Kilole Natural G4',
       processing: 'natural',
       grade: 'Grade 4',
       quantityKg: 2500,
-      askingPrice: 255,
+      askingPrice: 720,
       woreda: 'Gomma',
       kebele: 'Kilole',
       moisture: 12.2,
@@ -720,11 +567,11 @@ async function seed() {
     },
     {
       farmerIdx: 2, // Worku (Agaro)
-      coffeeType: 'Agaro Gembe Washed Grade 4',
+      coffeeType: 'Agaro Gembe Washed G4',
       processing: 'washed',
       grade: 'Grade 4',
       quantityKg: 3100,
-      askingPrice: 280,
+      askingPrice: 790,
       woreda: 'Agaro',
       kebele: 'Gembe',
       moisture: 11.9,
@@ -743,7 +590,7 @@ async function seed() {
     const mPrice = marketPriceDocs.find(
       (m) => m.processing === item.processing && m.grade === item.grade
     );
-    const ref = mPrice ? mPrice.currentPricePerKgETB : 320;
+    const ref = mPrice ? mPrice.currentPricePerKgETB : 720;
     const diff = item.askingPrice - ref;
     const ratio = (item.askingPrice / ref) * 100;
     const status = ratio < 75 ? 'very_low' : ratio < 90 ? 'low' : 'fair';
@@ -787,20 +634,20 @@ async function seed() {
     {
       listingIdx: 0,
       buyerIdx: 0, // OCFCU (verified)
-      price: 430,  // Paid 430 on 410 ref -> 105% fairness!
+      price: 1210, // Paid 1210 on 1150 ref -> 105% fairness
       qty: 2500,
       farmerRating: 5,
       buyerRating: 5,
       qualityPromised: 'Grade 1',
       qualityDelivered: 'Grade 1',
       qualityMatch: 100,
-      farmerComment: 'OCFCU paid 20 ETB/kg above the ECX floor and transferred money within 24 hours. Very fair partner!',
+      farmerComment: 'OCFCU paid 60 ETB/kg above the market reference and transferred money within 24 hours. Very fair partner!',
       buyerComment: 'Gemechu provided top-tier Grade 1 Mana washed cherries. Perfect 11.2% moisture, spotless parchment.',
     },
     {
       listingIdx: 2,
       buyerIdx: 1, // Jimma Highland Specialty (verified)
-      price: 465,  // Paid 465 on 450 ref -> 103% fairness
+      price: 1300, // Paid 1300 on 1260 ref -> 103% fairness
       qty: 1200,
       farmerRating: 5,
       buyerRating: 5,
@@ -813,7 +660,7 @@ async function seed() {
     {
       listingIdx: 4,
       buyerIdx: 0, // OCFCU (verified)
-      price: 420,  // Paid 420 on 410 ref -> 102% fairness
+      price: 1175, // Paid 1175 on 1150 ref -> 102% fairness
       qty: 3500,
       farmerRating: 5,
       buyerRating: 5,
@@ -826,7 +673,7 @@ async function seed() {
     {
       listingIdx: 6,
       buyerIdx: 2, // Kaffa Heritage Roasters (verified)
-      price: 375,  // Paid 375 on 370 ref -> 101% fairness
+      price: 1050, // Paid 1050 on 1040 ref -> 101% fairness
       qty: 2800,
       farmerRating: 5,
       buyerRating: 4,
@@ -839,7 +686,7 @@ async function seed() {
     {
       listingIdx: 8,
       buyerIdx: 1, // Jimma Highland Specialty (verified)
-      price: 475,  // Paid 475 on 450 ref -> 105% fairness
+      price: 1325, // Paid 1325 on 1260 ref -> 105% fairness
       qty: 1500,
       farmerRating: 5,
       buyerRating: 5,
@@ -852,7 +699,7 @@ async function seed() {
     {
       listingIdx: 10,
       buyerIdx: 2, // Kaffa Heritage Roasters (verified)
-      price: 325,  // Paid 325 on 320 ref -> 101% fairness
+      price: 910, // Paid 910 on 900 ref -> 101% fairness
       qty: 3200,
       farmerRating: 4,
       buyerRating: 4,
@@ -870,6 +717,9 @@ async function seed() {
     const buyer = buyerUsers[spec.buyerIdx];
     const buyerProfile = buyerProfiles[spec.buyerIdx];
     const farmer = listing.farmer;
+
+    // Spread settlements over the last five months so the bureau chart shows a trend
+    const settledAt = new Date(Date.now() - [150, 118, 88, 57, 26, 6][i] * 86400000);
 
     // Create accepted Offer
     const offer = await Offer.create({
@@ -903,14 +753,14 @@ async function seed() {
       status: 'completed',
       deliveryConfirmedByFarmer: true,
       deliveryConfirmedByBuyer: true,
-      deliveryConfirmedAt: new Date(Date.now() - (7 - i) * 86400000),
+      deliveryConfirmedAt: settledAt,
       paymentConfirmedByFarmer: true,
       paymentConfirmedByBuyer: true,
-      paymentConfirmedAt: new Date(Date.now() - (7 - i) * 86400000),
+      paymentConfirmedAt: settledAt,
       paymentMethod: 'bank_transfer_cbe',
       reviewSubmittedByFarmer: true,
       reviewSubmittedByBuyer: true,
-      completedAt: new Date(Date.now() - (7 - i) * 86400000),
+      completedAt: settledAt,
       reportCard: {
         priceFairnessGrade: (() => {
           const ratio = spec.price / listing.marketReferencePrice;
@@ -991,15 +841,15 @@ async function seed() {
     farmer: createdListings[1].farmer,
     buyer: buyerUsers[0]._id,
     buyerProfile: buyerProfiles[0]._id,
-    offeredPricePerKg: 390, // Ref is 380 -> +10 Fair!
+    offeredPricePerKg: 1110, // Ref is 1080 -> +30 Fair
     quantityKg: 1000,
-    totalPriceETB: 390000,
+    totalPriceETB: 1110000,
     message: 'Greetings Gemechu! We are interested in 1,000 kg of your sun-dried natural lot. Can pick up this Friday from Kenteri.',
     deliveryTerms: 'buyer_pickup',
     status: 'pending',
-    marketPriceAtOffer: 380,
-    priceFairnessDiff: 10,
-    fairnessPercentage: 102.6,
+    marketPriceAtOffer: 1080,
+    priceFairnessDiff: 30,
+    fairnessPercentage: 102.8,
     fairnessStatus: 'fair',
   });
 
@@ -1009,15 +859,15 @@ async function seed() {
     farmer: createdListings[1].farmer,
     buyer: buyerUsers[1]._id,
     buyerProfile: buyerProfiles[1]._id,
-    offeredPricePerKg: 385,
+    offeredPricePerKg: 1095,
     quantityKg: 800,
-    totalPriceETB: 308000,
+    totalPriceETB: 876000,
     message: 'Highland Specialty would like 800 kg for export consignment to Frankfurt.',
     deliveryTerms: 'buyer_pickup',
     status: 'pending',
-    marketPriceAtOffer: 380,
-    priceFairnessDiff: 5,
-    fairnessPercentage: 101.3,
+    marketPriceAtOffer: 1080,
+    priceFairnessDiff: 15,
+    fairnessPercentage: 101.4,
     fairnessStatus: 'fair',
   });
 
@@ -1026,7 +876,7 @@ async function seed() {
     recipient: farmerUsers[0]._id,
     type: 'new_offer',
     title: 'New Fair Offer from OCFCU! 🌟',
-    message: 'Oromia Coffee Farmers Union offered 390 ETB/kg for your Mana Natural G1 (+10 ETB above ECX reference).',
+    message: 'Oromia Coffee Farmers Union offered 1,110 ETB/kg for your Mana Natural G1 (+30 ETB above the market reference).',
     link: '/farmer/offers',
     isRead: false,
   });
@@ -1041,7 +891,7 @@ async function seed() {
   });
 
   // 9. Recompute Ranks and Finalize Leaderboard
-  await refreshFarmerRanks();
+  await recalculateAllFarmerScores();
   await refreshBuyerRanks();
 
   console.log('\n============================================================');

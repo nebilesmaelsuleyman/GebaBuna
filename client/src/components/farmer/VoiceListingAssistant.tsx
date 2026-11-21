@@ -18,8 +18,10 @@ import {
   Coffee,
   Languages,
 } from 'lucide-react';
-import { api } from '../../services/api';
+import { api, AiGradingError } from '../../services/api';
 import { startWavRecording, ActiveRecorder } from '../../utils/audioRecorder';
+import ManualGradeForm from './ManualGradeForm';
+import { FallbackTag, GradedByBadge, isFallbackField, midpointPrice, PriceRangeEditor } from './GradingDisplay';
 
 type VoiceLang = 'om' | 'am';
 
@@ -64,9 +66,12 @@ export default function VoiceListingAssistant({
   const [beanPhoto, setBeanPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [gradingResult, setGradingResult] = useState<any | null>(null);
+  const [manualGrading, setManualGrading] = useState<{ title: string; message: string; photoUrl?: string } | null>(null);
   const [lastTranscript, setLastTranscript] = useState<string>('');
   const [woreda, setWoreda] = useState(profileLocation?.woreda || 'Mana');
   const [kebele, setKebele] = useState(profileLocation?.kebele || 'Kenteri');
+
+  const photoRunRef = useRef(0);
 
   // Audio recording refs
   const activeRecorderRef = useRef<ActiveRecorder | null>(null);
@@ -87,11 +92,11 @@ export default function VoiceListingAssistant({
     2: {
       om: {
         text: 'Kiiloo tokko gatii meeqaan gurgurtaa?',
-        subtext: 'Gatii kiiloo tokkoof barbaaddan qarshiin dubbadhaa (fkn: "Qarshii 450")',
+        subtext: 'Gatii kiiloo tokkoof barbaaddan qarshiin dubbadhaa (fkn: "Qarshii kuma tokko")',
       },
       am: {
         text: 'የአንዱን ኪሎ ዋጋ በስንት ብር መሸጥ ይፈልጋሉ?',
-        subtext: 'ለአንድ ኪሎ የሚፈልጉትን ዋጋ በብር ይናገሩ (ለምሳሌ፦ "450 ብር")',
+        subtext: 'ለአንድ ኪሎ የሚፈልጉትን ዋጋ በብር ይናገሩ (ለምሳሌ፦ "1000 ብር")',
       },
     },
     3: {
@@ -229,8 +234,8 @@ export default function VoiceListingAssistant({
         } else {
           setAudioError(
             lang === 'om'
-              ? `Dhageenye: "${transcript || 'Sagaleen hin qulqulloofne'}". Gatii qarshii hin arganne. Maaloo irra deebi'aa dubbadhaa (fkn: "Qarshii 450").`
-              : `የተሰማው፦ "${transcript || 'ድምጽ አልተሰማም'}". የዋጋ ቁጥር አልተገኘም። እባክዎ በድጋሚ ይናገሩ (ለምሳሌ፦ "450 ብር")።`
+              ? `Dhageenye: "${transcript || 'Sagaleen hin qulqulloofne'}". Gatii qarshii hin arganne. Maaloo irra deebi'aa dubbadhaa (fkn: "Qarshii kuma tokko").`
+              : `የተሰማው፦ "${transcript || 'ድምጽ አልተሰማም'}". የዋጋ ቁጥር አልተገኘም። እባክዎ በድጋሚ ይናገሩ (ለምሳሌ፦ "1000 ብር")።`
           );
         }
       }
@@ -250,29 +255,26 @@ export default function VoiceListingAssistant({
   const handlePhotoUpload = async (file: File) => {
     setBeanPhoto(file);
     setPhotoPreview(URL.createObjectURL(file));
+    const run = ++photoRunRef.current;
     setIsProcessing(true);
+    setAudioError(null);
 
     try {
       const res = await api.analyzeCoffeePhoto(file, { woreda, kebele });
+      if (run !== photoRunRef.current) return;
+      setManualGrading(null);
       setGradingResult({ ...res.analysis, location: res.location, photoUrl: res.photoUrl });
+      if (!askingPrice) setAskingPrice(midpointPrice(res.analysis?.estimated_price_min_etb, res.analysis?.estimated_price_max_etb, 0) || null);
       setCurrentStep(4);
     } catch (err: any) {
-      console.warn('Bean analysis fallback:', err);
-      // Fallback realistic grading
-      const fallback = {
-        grade_tier: 'Washed G2',
-        processing_type: 'Washed',
-        defect_percentage: 8,
-        estimated_price_min_etb: 420,
-        estimated_price_max_etb: 465,
-        confidence: 'high',
-        location: { region: 'Oromia', zone: 'Jimma', woreda, kebele },
-        is_fallback: true,
-      };
-      setGradingResult(fallback);
-      setCurrentStep(4);
+      if (run !== photoRunRef.current) return;
+      setManualGrading({
+        title: err instanceof AiGradingError ? err.title : 'AI is not responding right now',
+        message: err.message || 'AI grading is unavailable right now. Enter the grade and price yourself.',
+        photoUrl: err instanceof AiGradingError ? err.photoUrl : undefined,
+      });
     } finally {
-      setIsProcessing(false);
+      if (run === photoRunRef.current) setIsProcessing(false);
     }
   };
 
@@ -282,19 +284,22 @@ export default function VoiceListingAssistant({
     try {
       const aiGrade = gradingResult?.grade_tier || 'Washed G2';
       const gradeNumber = aiGrade.match(/G([1-5])/i)?.[1] || '2';
+      const manual = gradingResult?.provider === 'manual' || gradingResult?.provider === 'sample';
       const payload = {
         coffeeType: `${lang === 'om' ? 'Buna Filatamaa' : 'ምርጥ የቡና ምርት'} - ${aiGrade}`,
         grade: aiGrade.toLowerCase().includes('specialty') ? 'Specialty' : `Grade ${gradeNumber}`,
         processing: (gradingResult?.processing_type?.toLowerCase() || 'washed') as any,
         quantityKg: quantityKg || 500,
-        askingPricePerKg: askingPrice || 430,
+        askingPricePerKg: askingPrice || 1150,
         harvestDate: 'November 2026',
         woreda,
         kebele,
-        description: 'Listed with AI-assisted coffee quality analysis.',
-        aiEstimatedGrade: aiGrade,
-        aiConfidence: gradingResult?.confidence || '',
-        aiDefectsSummary: gradingResult?.defects_summary || gradingResult?.sorting_advice_english || '',
+        description: manual
+          ? 'Grade and price entered by the farmer (AI grader was unavailable).'
+          : 'Listed with AI-assisted coffee quality analysis.',
+        aiEstimatedGrade: manual ? '' : aiGrade,
+        aiConfidence: manual ? '' : gradingResult?.confidence || '',
+        aiDefectsSummary: manual ? '' : gradingResult?.defects_summary || gradingResult?.sorting_advice_english || '',
         photos: gradingResult?.photoUrl ? [gradingResult.photoUrl] : [],
       };
 
@@ -302,22 +307,11 @@ export default function VoiceListingAssistant({
       onListingCreated(res.listing);
       onClose();
     } catch (err: any) {
-      console.warn('Listing save fallback:', err);
-      onListingCreated({
-        _id: `list-${Date.now()}`,
-        title: `${gradingResult?.grade_tier || 'Washed G2'} Coffee Lot`,
-        quantityKg: quantityKg || 500,
-        askingPricePerKg: askingPrice || 430,
-        location: {
-          region: 'Oromia',
-          zone: 'Jimma',
-          woreda,
-          kebele,
-        },
-        status: 'open',
-        createdAt: 'Just now',
-      });
-      onClose();
+      setAudioError(
+        err?.status === 401 || err?.status === 403
+          ? 'Sign in as a farmer to publish this listing.'
+          : err.message || 'The listing could not be saved.'
+      );
     } finally {
       setIsProcessing(false);
     }
@@ -340,7 +334,7 @@ export default function VoiceListingAssistant({
         </button>
 
         {/* Header */}
-        <div className="flex items-center justify-between pr-8 mb-5">
+        <div className="mb-5 flex flex-col gap-4 pr-8 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-gold-500 to-amber-600 flex items-center justify-center text-white shadow-md">
               <Mic className="w-6 h-6 animate-pulse" />
@@ -656,21 +650,21 @@ export default function VoiceListingAssistant({
                   <>
                     <button
                       onClick={() => {
-                        setAskingPrice(400);
+                        setAskingPrice(1000);
                         setLastTranscript(lang === 'om' ? 'Qarshii dhibba afur' : 'አራት መቶ ብር');
                       }}
                       className="px-3 py-1.5 rounded-lg bg-coffee-50 hover:bg-gold-100 border border-coffee-200 text-xs font-bold text-coffee-800"
                     >
-                      400 ETB (Dhibba Afur)
+                      1,000 ETB (Kuma Tokko)
                     </button>
                     <button
                       onClick={() => {
-                        setAskingPrice(450);
+                        setAskingPrice(1150);
                         setLastTranscript(lang === 'om' ? 'Qarshii dhibba afurii fi shantama' : 'አራት መቶ ሃምሳ ብር');
                       }}
                       className="px-3 py-1.5 rounded-lg bg-coffee-50 hover:bg-gold-100 border border-coffee-200 text-xs font-bold text-coffee-800"
                     >
-                      450 ETB / kg
+                      1,150 ETB / kg
                     </button>
                     <button
                       onClick={() => {
@@ -689,7 +683,28 @@ export default function VoiceListingAssistant({
         )}
 
         {/* Step 3: Photo Upload & AI Quality Grading */}
-        {currentStep === 3 && (
+        {currentStep === 3 && manualGrading && (
+          <div className="space-y-4 py-2">
+            {photoPreview && <img src={photoPreview} alt="Coffee beans preview" className="w-full max-h-40 object-cover rounded-xl border border-coffee-200" />}
+            <ManualGradeForm
+              title={manualGrading.title}
+              message={manualGrading.message}
+              photoUrl={manualGrading.photoUrl}
+              initialPrice={askingPrice || undefined}
+              submitLabel={lang === 'om' ? 'Itti fufi (Continue)' : 'ቀጥል (Continue)'}
+              retrying={isProcessing}
+              onRetry={beanPhoto ? () => handlePhotoUpload(beanPhoto) : undefined}
+              onSubmit={(result) => {
+                setGradingResult(result);
+                setAskingPrice(result.asking_price_etb);
+                setManualGrading(null);
+                setCurrentStep(4);
+              }}
+            />
+          </div>
+        )}
+
+        {currentStep === 3 && !manualGrading && (
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3 rounded-2xl border border-coffee-200 bg-white p-4">
               <label className="text-xs font-bold text-coffee-700">Woreda<input value={woreda} onChange={(event) => setWoreda(event.target.value)} required className="mt-1 w-full rounded-xl border border-coffee-200 px-3 py-2.5 font-medium outline-none focus:border-forest-500" placeholder="Mana" /></label>
@@ -737,6 +752,23 @@ export default function VoiceListingAssistant({
               </button>
             </div>
 
+            <button
+              type="button"
+              onClick={() => {
+                photoRunRef.current++;
+                setIsProcessing(false);
+                setManualGrading({
+                  title: lang === 'om' ? 'Grade harkaan galchi' : 'ደረጃ በእጅ ያስገቡ',
+                  message: isProcessing
+                    ? 'You stopped waiting for the AI. Choose the ECX grade and your asking price below.'
+                    : 'Choose the ECX grade and your asking price below.',
+                });
+              }}
+              className="w-full py-2.5 rounded-xl border border-coffee-300 text-coffee-800 font-semibold text-xs hover:bg-coffee-50 transition-colors"
+            >
+              {lang === 'om' ? 'Grade fi gatii harkaan galchi (without AI)' : 'ደረጃና ዋጋ በእጅ አስገባ (without AI)'}
+            </button>
+
             {/* Quick Demo Sample Photo Button */}
             <div className="text-center">
               <button
@@ -745,11 +777,11 @@ export default function VoiceListingAssistant({
                   setGradingResult({
                     grade_tier: 'Washed G2',
                     processing_type: 'Washed',
-                    defect_percentage: 6,
-                    estimated_price_min_etb: 425,
-                    estimated_price_max_etb: 460,
-                    confidence: 'high',
+                    estimated_price_min_etb: 965,
+                    estimated_price_max_etb: 1130,
+                    provider: 'sample',
                   });
+                  if (!askingPrice) setAskingPrice(midpointPrice(965, 1130, 0));
                   setCurrentStep(4);
                 }}
                 className="text-xs text-forest-700 hover:underline font-bold"
@@ -766,31 +798,50 @@ export default function VoiceListingAssistant({
         {currentStep === 4 && (
           <div className="space-y-4 py-2 animate-in fade-in">
             {/* AI Grading Card */}
+            <GradedByBadge result={gradingResult} />
             <div className="p-4 rounded-2xl bg-gradient-to-br from-forest-600 to-emerald-800 text-white shadow-lg">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] uppercase tracking-wider font-bold text-forest-200">
-                  {lang === 'om' ? 'Qulqullina AI Mirkanaa’e' : 'በአይ የተረጋገጠ የቡና ጥራት'}
+                  {gradingResult?.provider === 'manual'
+                    ? lang === 'om' ? 'Grade harkaan galchame' : 'በእጅ የገባ ደረጃ'
+                    : lang === 'om' ? 'Qulqullina AI Mirkanaa’e' : 'በአይ የተረጋገጠ የቡና ጥራት'}
                 </span>
-                <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-[11px] font-black">
-                  {gradingResult?.confidence || 'High'} Confidence
-                </span>
+                {gradingResult?.provider !== 'manual' && (
+                  <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-[11px] font-black">
+                    Confidence: {isFallbackField(gradingResult, 'confidence') ? '—' : gradingResult?.confidence}
+                    <FallbackTag show={isFallbackField(gradingResult, 'confidence')} />
+                  </span>
+                )}
               </div>
 
               <div className="flex items-baseline justify-between">
                 <div>
-                  <h4 className="text-2xl font-black">{gradingResult?.grade_tier || 'Washed G2'}</h4>
+                  <h4 className="text-2xl font-black">{gradingResult?.grade_tier || '—'}<FallbackTag show={isFallbackField(gradingResult, 'grade_tier')} /></h4>
                   <p className="text-xs text-forest-100">
-                    {gradingResult?.processing_type || 'Washed'} • Defect: {gradingResult?.defect_percentage || 8}%
+                    {gradingResult?.processing_type || '—'}
+                    {gradingResult?.provider !== 'manual' && (
+                      <> • Defect: {isFallbackField(gradingResult, 'defect_percentage') ? '—' : `${gradingResult?.defect_percentage}%`}<FallbackTag show={isFallbackField(gradingResult, 'defect_percentage')} /></>
+                    )}
                   </p>
                 </div>
                 <div className="text-right">
-                  <span className="text-[10px] text-forest-200 block">ECX Fair Market Price</span>
+                  <span className="text-[10px] text-forest-200 block">ECX price range</span>
                   <span className="text-lg font-black text-gold-300">
-                    {gradingResult?.estimated_price_min_etb || 420} - {gradingResult?.estimated_price_max_etb || 460} ETB
+                    {gradingResult?.estimated_price_min_etb && gradingResult?.estimated_price_max_etb
+                      ? `${gradingResult.estimated_price_min_etb.toLocaleString()} - ${gradingResult.estimated_price_max_etb.toLocaleString()} ETB`
+                      : '—'}
                   </span>
                 </div>
               </div>
             </div>
+
+            <PriceRangeEditor
+              min={gradingResult?.estimated_price_min_etb}
+              max={gradingResult?.estimated_price_max_etb}
+              value={askingPrice || 0}
+              onChange={setAskingPrice}
+              gradeLabel={gradingResult?.grade_tier}
+            />
 
             {/* Farmer Transaction Card */}
             <div className="p-4 rounded-2xl bg-coffee-50 border border-coffee-200 space-y-3">
@@ -854,6 +905,9 @@ export default function VoiceListingAssistant({
               setAskingPrice(null);
               setBeanPhoto(null);
               setGradingResult(null);
+              setManualGrading(null);
+              photoRunRef.current++;
+              setIsProcessing(false);
             }}
             className="hover:text-coffee-900 flex items-center gap-1 font-semibold"
           >

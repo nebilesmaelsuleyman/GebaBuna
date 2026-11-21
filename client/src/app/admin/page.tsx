@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
 import { AdminStats } from '../../types';
+import AdminRegistry from '../../components/admin/AdminRegistry';
+import { useAuth } from '../../context/AuthContext';
 import {
   ShieldCheck,
   ShieldAlert,
@@ -35,62 +37,28 @@ import {
 } from 'recharts';
 
 export default function AdminPortalPage() {
+  const { user } = useAuth();
   const [stats, setStats] = useState<AdminStats>({
-    totalFarmers: 6,
-    totalBuyers: 5,
-    pendingVerifications: 1,
-    totalListings: 15,
-    completedTrades: 6,
-    totalKgTraded: 34500,
-    totalETBValue: 14350000,
-    avgPricePaid: 415.5,
-    avgMarketPrice: 405.0,
-    fairnessRatioOverall: 102,
-    flaggedBuyersCount: 1,
+    totalFarmers: 0,
+    totalBuyers: 0,
+    pendingVerifications: 0,
+    totalListings: 0,
+    completedTrades: 0,
+    totalKgTraded: 0,
+    totalETBValue: 0,
+    avgPricePaid: 0,
+    avgMarketPrice: 0,
+    fairnessRatioOverall: 0,
+    flaggedBuyersCount: 0,
   });
-
-  const [pendingBuyers, setPendingBuyers] = useState<any[]>([
-    {
-      _id: 'pb-1',
-      companyName: 'Abba Jifar Trading PLC',
-      ownerName: 'Kedir Abba Fita',
-      businessType: 'Exporter',
-      phone: '+251 917 554 433',
-      email: 'kedir@abbajifar.com',
-      tradeLicenseNumber: 'ET-JIM-2025-0988',
-      tinNumber: '0054321987',
-      bankName: 'Commercial Bank of Ethiopia (Jimma Branch)',
-      status: 'pending',
-      submittedDate: 'Today, 09:15 AM',
-      documents: ['Jimma Commercial Trade License.pdf', 'TIN Certificate 2026.pdf'],
-    },
-  ]);
-
-  const [flaggedBuyers, setFlaggedBuyers] = useState<any[]>([
-    {
-      _id: 'fb-1',
-      companyName: 'Red Sea Middlemen Trading Ltd',
-      ownerName: 'Tesfaye Alemu',
-      fairnessScore: 42,
-      totalKgBought: 4200,
-      violationsCount: 4,
-      reason: 'Attempted to offer 280 ETB/kg on Specialty lot (statutory floor is 430 ETB/kg). Suspended from direct bidding.',
-      status: 'suspended',
-    },
-  ]);
-
-  const [chartData, setChartData] = useState([
-    { month: 'Jul', ecxBenchmark: 280, avgPricePaid: 260 },
-    { month: 'Aug', ecxBenchmark: 300, avgPricePaid: 285 },
-    { month: 'Sep', ecxBenchmark: 315, avgPricePaid: 310 },
-    { month: 'Oct', ecxBenchmark: 330, avgPricePaid: 335 },
-    { month: 'Nov', ecxBenchmark: 350, avgPricePaid: 355 },
-  ]);
+  const [pendingBuyers, setPendingBuyers] = useState<any[]>([]);
+  const [flaggedBuyers, setFlaggedBuyers] = useState<any[]>([]);
+  const [chartData, setChartData] = useState<Array<{ month: string; ecxBenchmark: number; avgPricePaid: number; kg: number }>>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [auditMessage, setAuditMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadAdminData() {
+  const loadAdminData = React.useCallback(async () => {
       try {
         const [statsRes, pendingRes] = await Promise.all([api.getAdminStats(), api.getPendingBuyers()]);
 
@@ -102,6 +70,7 @@ export default function AdminPortalPage() {
                 month: point.month,
                 ecxBenchmark: point.marketPrice ?? point.ecxBenchmark,
                 avgPricePaid: point.paidPrice ?? point.avgPricePaid,
+                kg: point.kg ?? 0,
               }))
             );
           }
@@ -117,12 +86,18 @@ export default function AdminPortalPage() {
             documents: buyer.uploadedDocuments || [],
           })));
         }
-      } catch (err) {
-        console.error(err);
+      } catch (err: any) {
+        setLoadError(
+          err?.status === 401 || err?.status === 403
+            ? 'Sign in as the Jimma Agri Bureau admin to see live statistics.'
+            : err?.message || 'Could not load admin statistics.'
+        );
       }
-    }
-    loadAdminData();
   }, []);
+
+  useEffect(() => {
+    loadAdminData();
+  }, [loadAdminData]);
 
   const handleApproveBuyer = async (id: string, name: string) => {
     try {
@@ -174,6 +149,10 @@ export default function AdminPortalPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
+      {loadError && (
+        <div className="rounded-2xl border border-cherry-200 bg-cherry-50 px-4 py-3 text-sm text-cherry-800">{loadError}</div>
+      )}
+
       {/* Bureau Regulatory Seal Banner */}
       <div className="bg-gradient-to-r from-red-950 via-coffee-950 to-stone-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl border border-red-900/50 relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -194,46 +173,51 @@ export default function AdminPortalPage() {
                 Oromia Regional Government • Smallholder Coffee Price Protection & Verification Registry
               </p>
               <div className="text-[11px] text-gold-300 font-medium">
-                Officer: Ato Bekele Tolera (Head of Coffee Value Chain & Market Regulation)
+                Officer: {user?.fullName || 'Not signed in'}
               </div>
             </div>
           </div>
         </div>
 
         {/* Bureau KPI Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4 pt-6 mt-6 border-t border-red-900/60 text-xs">
-          <div>
-            <span className="text-coffee-300 block text-[11px]">Registered Farmers:</span>
-            <span className="text-xl font-bold text-white">{stats.totalFarmers}</span>
-          </div>
-          <div>
-            <span className="text-coffee-300 block text-[11px]">Commercial Buyers:</span>
-            <span className="text-xl font-bold text-white">{stats.totalBuyers}</span>
-          </div>
-          <div>
-            <span className="text-coffee-300 block text-[11px]">Volume Traded:</span>
-            <span className="text-xl font-bold text-gold-400">
-              {stats.totalKgTraded.toLocaleString()} kg
-            </span>
-          </div>
-          <div>
-            <span className="text-coffee-300 block text-[11px]">Total Capital Value:</span>
-            <span className="text-xl font-bold text-white">
-              {(stats.totalETBValue / 1000000).toFixed(1)}M ETB
-            </span>
-          </div>
-          <div>
-            <span className="text-coffee-300 block text-[11px]">Market Fairness Index:</span>
-            <span className="text-xl font-black text-forest-300">
-              {stats.fairnessRatioOverall}%
-            </span>
-          </div>
-          <div>
-            <span className="text-coffee-300 block text-[11px]">Pending Approvals:</span>
-            <span className="text-xl font-bold text-amber-300">
-              {stats.pendingVerifications}
-            </span>
-          </div>
+        <div className="mt-6 space-y-4 border-t border-red-900/60 pt-6 text-xs">
+          {[
+            {
+              title: 'People',
+              items: [
+                { label: 'Active farmers', value: stats.totalFarmers.toLocaleString(), tone: 'text-white' },
+                { label: 'Active buyers', value: stats.totalBuyers.toLocaleString(), tone: 'text-white' },
+                { label: 'Verified buyers', value: (stats.verifiedBuyers ?? 0).toLocaleString(), tone: 'text-forest-300' },
+                { label: 'Pending approvals', value: stats.pendingVerifications.toLocaleString(), tone: 'text-amber-300' },
+                { label: 'Removed accounts', value: (stats.removedUsers ?? 0).toLocaleString(), tone: 'text-red-300' },
+                { label: 'Watchlist (fairness < 50)', value: stats.flaggedBuyersCount.toLocaleString(), tone: 'text-red-300' },
+              ],
+            },
+            {
+              title: 'Market',
+              items: [
+                { label: 'Open lots', value: `${(stats.openListings ?? 0).toLocaleString()} · ${(stats.openKgListed ?? 0).toLocaleString()} kg`, tone: 'text-white' },
+                { label: 'Open offers', value: (stats.openOffers ?? 0).toLocaleString(), tone: 'text-white' },
+                { label: 'Trades in progress', value: (stats.tradesInProgress ?? 0).toLocaleString(), tone: 'text-white' },
+                { label: 'Settled trades', value: stats.completedTrades.toLocaleString(), tone: 'text-white' },
+                { label: 'Volume traded', value: `${stats.totalKgTraded.toLocaleString()} kg`, tone: 'text-gold-400' },
+                { label: 'Paid to farmers', value: `${(stats.totalETBValue / 1000000).toFixed(2)}M ETB`, tone: 'text-gold-400' },
+                { label: 'Avg paid vs reference', value: `${stats.avgPricePaid.toLocaleString()} / ${stats.avgMarketPrice.toLocaleString()} ETB · ${stats.fairnessRatioOverall}%`, tone: 'text-forest-300' },
+              ],
+            },
+          ].map((group) => (
+            <div key={group.title}>
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-coffee-400">{group.title}</p>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-7">
+                {group.items.map((item) => (
+                  <div key={item.label}>
+                    <span className="block text-[11px] text-coffee-300">{item.label}</span>
+                    <span className={`text-base font-bold sm:text-lg ${item.tone}`}>{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -363,7 +347,7 @@ export default function AdminPortalPage() {
                     <span className="text-[11px] text-red-800">Agent: {fb.ownerName || fb.user?.fullName || 'Unknown'}</span>
                   </div>
                   <span className="px-2 py-0.5 rounded-full bg-red-700 text-white text-[10px] font-black uppercase tracking-wider">
-                    Suspended
+                    {fb.user?.isActive === false ? 'Removed' : fb.verificationStatus || 'flagged'}
                   </span>
                 </div>
 
@@ -373,17 +357,21 @@ export default function AdminPortalPage() {
                     <strong className="text-red-950 font-black text-sm">{fb.fairnessScore}%</strong>
                   </div>
                   <div>
-                    <span className="text-[10px] text-red-700 block">Floor Violations:</span>
-                    <strong className="text-red-950 font-black text-sm">{fb.violationsCount ?? '—'} Instances</strong>
+                    <span className="text-[10px] text-red-700 block">Volume bought:</span>
+                    <strong className="text-red-950 font-black text-sm">{(fb.totalKgBought || 0).toLocaleString()} kg</strong>
                   </div>
                 </div>
 
-                <p className="text-[11px] text-red-900 leading-relaxed bg-white/60 p-2.5 rounded-lg border border-red-100">
-                  {fb.reason}
-                </p>
+                {(fb.rejectionReason || fb.adminNotes || fb.reason) && (
+                  <p className="text-[11px] text-red-900 leading-relaxed bg-white/60 p-2.5 rounded-lg border border-red-100">
+                    {fb.rejectionReason || fb.adminNotes || fb.reason}
+                  </p>
+                )}
 
                 <div className="text-[11px] text-red-800 font-semibold pt-1">
-                  Enforcement: Direct bidding disabled until compliance hearing at Jimma Agriculture Bureau.
+                  {fb.verificationStatus === 'verified'
+                    ? 'Still allowed to bid. Review below and suspend or remove if floor violations are confirmed.'
+                    : 'Cannot bid: only verified buyers can make offers.'}
                 </div>
               </div>
             ))}
@@ -396,7 +384,7 @@ export default function AdminPortalPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-coffee-100">
           <div>
             <h3 className="font-bold text-coffee-950 text-base">
-              Jimma Zone Market Fairness Trend (Jul - Nov 2026)
+              Jimma Zone Market Fairness Trend
             </h3>
             <span className="text-xs text-coffee-600">
               Comparison between official ECX statutory benchmarks and actual average prices paid by commercial buyers to smallholders.
@@ -417,7 +405,7 @@ export default function AdminPortalPage() {
             <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0e6dc" />
               <XAxis dataKey="month" stroke="#7e3e29" fontSize={12} />
-              <YAxis stroke="#7e3e29" fontSize={12} domain={[200, 400]} />
+              <YAxis stroke="#7e3e29" fontSize={12} domain={['auto', 'auto']} />
               <Tooltip
                 contentStyle={{
                   backgroundColor: '#230e09',
@@ -434,9 +422,16 @@ export default function AdminPortalPage() {
         </div>
 
         <div className="p-4 rounded-xl bg-forest-50 border border-forest-200 text-xs text-forest-900 leading-relaxed">
-          <strong>Key Impact Finding:</strong> Since the introduction of Buna Fair Price, average smallholder coffee prices in Jimma have consistently exceeded official ECX benchmarks by <strong>+1.5% to +4.2%</strong>, directly redirecting an estimated <strong>1.8 Million ETB</strong> in broker margins directly into smallholder farmer households.
+          {chartData.some((p) => p.ecxBenchmark > 0) ? (() => {
+            const traded = chartData.filter((p) => p.ecxBenchmark > 0);
+            const avgGap = traded.reduce((sum, p) => sum + (p.avgPricePaid - p.ecxBenchmark) / p.ecxBenchmark, 0) / traded.length;
+            const pct = Math.round(avgGap * 1000) / 10;
+            return <><strong>From recorded trades:</strong> farmers were paid on average <strong>{pct > 0 ? '+' : ''}{pct}%</strong> relative to the reference price over the months shown.</>;
+          })() : 'No settled trades yet. This summary is calculated from real trades once they are recorded.'}
         </div>
       </div>
+
+      <AdminRegistry onChanged={loadAdminData} />
     </div>
   );
 }

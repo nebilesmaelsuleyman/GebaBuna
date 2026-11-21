@@ -29,8 +29,8 @@ export const translations: Translations = {
   navMarketPrices: { om: 'Gatii Gabaa ECX', am: 'የገበያ ዋጋ (ECX)', en: 'Market Prices' },
   navMarketplace: { om: 'Gabaa Bunaa', am: 'የቡና ገበያ', en: 'Marketplace' },
   navLeaderboard: { om: 'Sadarkaa Qulqullinaa', am: 'ደረጃ ሰንጠረዥ', en: 'Leaderboard' },
-  navFarmerPortal: { om: 'Koreera Qotee Bulaa', am: 'የአርሶ አደር መድረክ', en: 'Farmer Portal' },
-  navBuyerPortal: { om: 'Koreera Bittaa', am: 'የገዢዎች መድረክ', en: 'Buyer Portal' },
+  navFarmerPortal: { om: 'Karoora Qotee Bulaa', am: 'የአርሶ አደር መድረክ', en: 'Farmer Portal' },
+  navBuyerPortal: { om: 'Karoora Bittaa', am: 'የገዢዎች መድረክ', en: 'Buyer Portal' },
   navAdminPortal: { om: 'Waajjira Qonnaa', am: 'ግብርና መምሪያ', en: 'Agri Bureau' },
   login: { om: 'Seeni', am: 'ግባ', en: 'Sign In' },
   logout: { om: 'Bahi', am: 'ውጣ', en: 'Sign Out' },
@@ -45,7 +45,7 @@ export const translations: Translations = {
   heroSubtitle: {
     om: 'Gatii gabaa ECX guyyaa guyyaa Jimmaa hordofaa, daldaltoota mirkanaa’an waliin daldalaa, bu’aa keessan dabalaa.',
     am: 'የዕለቱን የጅማ ECX ቡና መነሻ ዋጋ በቀጥታ ይከታተሉ፤ ከተመሰከረላቸው ገዢዎች ጋር በፍትሃዊ ዋጋ ይገበያዩ።',
-    en: 'Track daily ECX coffee floor benchmarks in Jimma, trade directly with verified fair buyers, and eliminate unfair middleman discounts.',
+    en: 'See fair reference prices and floors for Jimma coffee, trade directly with verified fair buyers, and eliminate unfair middleman discounts.',
   },
   browseListings: { om: 'Buna Gabaarra Jiru Ilaali', am: 'የቀረበ ቡና ይመልከቱ', en: 'Browse Coffee' },
   listMyCoffee: { om: 'Buna Koo Gurguruuf Dhiyeessi', am: 'ቡናዎን ለሽያጭ ያቅርቡ', en: 'List Harvest' },
@@ -58,7 +58,7 @@ export const translations: Translations = {
   statValue: { om: 'Gatii Walii Galaa (ETB)', am: 'አጠቃላይ የገንዘብ ዝውውር', en: 'Total Traded Value' },
 
   // Market Prices
-  dailyFloorPrice: { om: 'Gatii Gadi-aanaa (Floor)', am: 'ዝቅተኛ መነሻ ዋጋ', en: 'Official ECX Floor' },
+  dailyFloorPrice: { om: 'Gatii Gadi-aanaa (Floor)', am: 'ዝቅተኛ መነሻ ዋጋ', en: 'Protection Floor' },
   currentAveragePrice: { om: 'Gatii Giddu-galeessaa', am: 'አማካኝ የገበያ ዋጋ', en: 'Current Benchmark' },
   priceCalculator: { om: 'Shallaggii Gatii Bunaa', am: 'የቡና ዋጋ ማሰያ', en: 'Crop Value Calculator' },
   calculateValue: { om: 'Gatii Qajeelaa Shallagi', am: 'ፍትሃዊ ዋጋ አስላ', en: 'Calculate Payout' },
@@ -103,7 +103,7 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [language, setLanguage] = useState<PreferredLanguage>('om'); // Afaan Oromoo default for Jimma farmers
+  const [language, setLanguage] = useState<PreferredLanguage>('en');
 
   useEffect(() => {
     const saved = localStorage.getItem('buna_lang') as PreferredLanguage;

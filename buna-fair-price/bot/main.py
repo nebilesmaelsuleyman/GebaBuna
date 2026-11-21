@@ -6,6 +6,7 @@ Main Bot Application
 from __future__ import annotations
 
 import asyncio
+import html
 import io
 import json
 import logging
@@ -26,6 +27,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from telegram import (
     BotCommand,
+    ReplyKeyboardRemove,
     Update,
     constants,
 )
@@ -56,7 +58,8 @@ from bot.formatter import (
     format_ecx_table,
     build_language_keyboard,
 )
-from bot.voice_service import VoiceService
+from bot.voice_service import VoiceService, VoiceIntent
+from bot.listing_service import ContactStore, ListingService, draft_from_intent, text as listing_text
 
 # ── User Preferences Store ───────────────────────────────────────────────────
 USER_LANG_FILE = DATA_DIR / "user_languages.json"
@@ -96,6 +99,8 @@ class UserPreferenceStore:
 # ── Global Services ──────────────────────────────────────────────────────────
 prefs = UserPreferenceStore(USER_LANG_FILE)
 voice_service = VoiceService()
+contacts = ContactStore(DATA_DIR / "user_contacts.json")
+listing_service = ListingService()
 
 # Cache for recent GradeResults: cache_id -> GradeResult
 recent_results: Dict[str, GradeResult] = {}
@@ -201,6 +206,13 @@ async def fallback_text_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
     user_id = update.effective_user.id if update.effective_user else 0
     lang = prefs.get_lang(user_id)
+
+    # Typed questions use the same agent as voice notes (price questions, sell offers)
+    answer = await voice_service.answer(message.text or "", lang, ECX_PRICES)
+    if answer.intent.intent in ("price", "sell"):
+        await message.reply_html(answer.text)
+        await offer_listing(message, answer.intent, lang)
+        return
     await message.reply_html(get_text("unsupported_input", lang=lang))
 
 
@@ -310,10 +322,38 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 # ── Voice Message Handler ─────────────────────────────────────────────────────
+async def send_spoken_reply(message, text: str, lang: str) -> None:
+    """Send the answer as text, then as an Addis AI voice reply when available."""
+    await message.reply_html(text)
+    if lang not in ("om", "am"):
+        return
+    try:
+        await message.chat.send_action(constants.ChatAction.RECORD_VOICE)
+        audio = await voice_service.synthesize(text, lang=lang)
+        if not audio:
+            return
+        audio_bytes, mime = audio
+        if "ogg" in mime or "opus" in mime:
+            await message.reply_voice(voice=io.BytesIO(audio_bytes))
+        else:
+            extension = "wav" if "wav" in mime else "mp3"
+            await message.reply_audio(
+                audio=io.BytesIO(audio_bytes),
+                filename=f"bunajimma_reply.{extension}",
+                title="BunaJimma",
+            )
+    except Exception as exc:
+        logger.warning("Voice reply failed: %s", exc)
+
+
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
-    Handle incoming voice notes / audio.
-    Acknowledges the farmer's voice input and prepares for the upcoming voice integration.
+    Voice agent: farmer sends a voice note in Afaan Oromoo / Amharic, e.g.
+    'Gatiin buna Natural G2 meeqa?' or 'Kiiloo dhibba shan qarshii kuma tokkoon gurguruu barbaada.'
+    1. Download the voice note (OGG/Opus)
+    2. Transcribe with Addis AI (Gemini fallback)
+    3. Understand the intent and compare with the ECX reference price table
+    4. Reply with text and a spoken answer
     """
     message = update.message
     if not message:
@@ -322,8 +362,80 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     user_id = update.effective_user.id if update.effective_user else 0
     lang = prefs.get_lang(user_id)
 
-    ack_text = await voice_service.handle_voice_message(user_lang=lang)
-    await message.reply_html(ack_text)
+    media = message.voice or message.audio
+    if not media:
+        return
+
+    status_msg = await message.reply_html(await voice_service.handle_voice_message(user_lang=lang))
+    await message.chat.send_action(constants.ChatAction.TYPING)
+
+    try:
+        file_obj = await media.get_file()
+        buffer = io.BytesIO()
+        await file_obj.download_to_memory(out=buffer)
+        mime_type = getattr(media, "mime_type", None) or "audio/ogg"
+
+        transcript = await voice_service.transcribe(buffer.getvalue(), lang_hint=lang, mime_type=mime_type)
+        if not transcript.text:
+            await status_msg.edit_text(voice_service.reply_text("not_heard", lang))
+            return
+
+        await status_msg.edit_text(
+            voice_service.reply_text("heard", lang, text=html.escape(transcript.text)),
+            parse_mode=constants.ParseMode.HTML,
+        )
+        answer = await voice_service.answer(transcript.text, lang, ECX_PRICES)
+        await send_spoken_reply(message, answer.text, lang)
+        await offer_listing(message, answer.intent, lang)
+    except Exception as exc:
+        logger.exception("Error processing voice note: %s", exc)
+        await status_msg.edit_text(voice_service.reply_text("not_heard", lang))
+
+
+# ── Voice / text listing (created only after the farmer confirms) ─────────────
+async def offer_listing(message, intent: VoiceIntent, lang: str) -> None:
+    """After a 'sell' answer, show the draft with Confirm / Cancel buttons."""
+    draft = draft_from_intent(intent)
+    if not draft:
+        return
+    draft_id = listing_service.save_draft(draft)
+    prompt, keyboard = listing_service.confirm_prompt(draft, draft_id, lang)
+    await message.reply_html(prompt, reply_markup=keyboard)
+
+
+async def publish_draft(message, draft_id: str, user, lang: str) -> None:
+    draft = listing_service.drafts.get(draft_id)
+    if not draft:
+        await message.reply_html(listing_text("expired", lang), reply_markup=ReplyKeyboardRemove())
+        return
+    phone = contacts.get(user.id)
+    try:
+        data = await listing_service.create_listing(draft, phone, user.full_name or "")
+    except Exception as exc:
+        logger.warning("Bot listing failed: %s", exc)
+        await message.reply_html(
+            listing_text("failed", lang, error=html.escape(str(exc))), reply_markup=ReplyKeyboardRemove()
+        )
+        return
+    listing_service.drafts.pop(draft_id, None)
+    await message.reply_html(listing_service.result_text(data, draft, lang), reply_markup=ReplyKeyboardRemove())
+
+
+async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Farmer shared their phone number so a confirmed draft can be listed."""
+    message = update.message
+    user = update.effective_user
+    if not message or not message.contact or not user:
+        return
+    lang = prefs.get_lang(user.id)
+    # Only accept the farmer's own number, not a forwarded contact card
+    if message.contact.user_id != user.id:
+        await message.reply_html(listing_text("share_phone", lang), reply_markup=ListingService.phone_keyboard(lang))
+        return
+    contacts.set(user.id, message.contact.phone_number)
+    draft_id = context.user_data.pop("pending_listing", None)
+    if draft_id:
+        await publish_draft(message, draft_id, user, lang)
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -400,6 +512,22 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         lang = data.split(":", 1)[1] if ":" in data else prefs.get_lang(user_id)
         await query.message.reply_html(get_text("send_photo_prompt", lang=lang))
 
+    # 5. Confirm or cancel a voice/text listing draft
+    elif data.startswith("listconfirm:") or data.startswith("listcancel:"):
+        action, draft_id = data.split(":", 1)
+        lang = prefs.get_lang(user_id)
+        await query.edit_message_reply_markup(reply_markup=None)
+        if action == "listcancel":
+            listing_service.drafts.pop(draft_id, None)
+            await query.message.reply_html(listing_text("cancelled", lang))
+        elif not contacts.get(user_id):
+            context.user_data["pending_listing"] = draft_id
+            await query.message.reply_html(
+                listing_text("share_phone", lang), reply_markup=ListingService.phone_keyboard(lang)
+            )
+        else:
+            await publish_draft(query.message, draft_id, update.effective_user, lang)
+
 
 # ── Application Factory ───────────────────────────────────────────────────────
 def create_application(token: Optional[str] = None) -> Application:
@@ -425,6 +553,7 @@ def create_application(token: Optional[str] = None) -> Application:
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.Document.IMAGE, handle_photo))
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
+    app.add_handler(MessageHandler(filters.CONTACT, handle_contact))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, fallback_text_handler))
     app.add_handler(MessageHandler(filters.COMMAND, unknown_command_handler))
 
@@ -453,4 +582,4 @@ def run_bot() -> None:
 
 
 if __name__ == "__main__":
-    run_bot()
+    sys.exit("Start the bot with: python run_bot.py")

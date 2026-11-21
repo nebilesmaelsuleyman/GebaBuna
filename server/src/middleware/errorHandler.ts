@@ -3,23 +3,24 @@ import { ZodError } from 'zod';
 
 export const errorHandler = (
   err: any,
-  _req: Request,
+  req: Request,
   res: Response,
   _next: NextFunction
 ): void => {
-  console.error('💥 [Server Error]:', err);
-
   if (err instanceof ZodError) {
+    const errors = err.errors.map((e) => ({ field: e.path.join('.'), message: e.message }));
+    console.warn(`⚠️ [Validation] ${req.method} ${req.originalUrl}: ${errors.map((e) => `${e.field}: ${e.message}`).join('; ')}`);
     res.status(400).json({
       success: false,
-      message: 'Validation failed',
-      errors: err.errors.map((e) => ({
-        field: e.path.join('.'),
-        message: e.message,
-      })),
+      message: errors[0]?.message || 'Validation failed',
+      errors,
     });
     return;
   }
+
+  const status = err.status || err.statusCode || 500;
+  if (status >= 500) console.error('💥 [Server Error]:', err);
+  else console.warn(`⚠️ [${status}] ${req.method} ${req.originalUrl}: ${err.message}`);
 
   if (err.name === 'ValidationError') {
     res.status(400).json({
@@ -38,7 +39,7 @@ export const errorHandler = (
     return;
   }
 
-  res.status(err.status || 500).json({
+  res.status(status).json({
     success: false,
     message: err.message || 'Internal server error occurred.',
   });

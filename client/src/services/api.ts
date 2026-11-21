@@ -1,3 +1,4 @@
+import { REFERENCE_PRICES, PRICE_SOURCE_NOTE } from '@/utils/coffeePrices';
 import {
   User,
   FarmerProfile,
@@ -7,9 +8,45 @@ import {
   Trade,
   MarketPrice,
   AdminStats,
+  PublicStats,
+  AdminUserRow,
+  AdminTradeRow,
+  AdminAuditEntry,
 } from '../types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
+
+export const OFFLINE_EVENT = 'buna:offline';
+export const SESSION_EXPIRED_EVENT = 'buna:session-expired';
+
+export class ApiError extends Error {
+  constructor(message: string, public status: number, public offline: boolean) {
+    super(message);
+  }
+}
+
+/** Photo grading failed for any reason; photoUrl is set when the photo was uploaded before the failure. */
+export class AiGradingError extends ApiError {
+  constructor(message: string, status: number, public photoUrl?: string) {
+    super(message, status, status === 0);
+  }
+
+  /** Banner title for the manual-entry form. */
+  get title(): string {
+    if (this.status === 422) return 'AI could not grade this photo';
+    if (this.status === 0) return 'Cannot reach the server';
+    return 'AI is not responding right now';
+  }
+}
+
+/** Sample data is only allowed when the server cannot be reached at all. */
+function isOffline(err: unknown): boolean {
+  if (err instanceof ApiError && err.offline) {
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event(OFFLINE_EVENT));
+    return true;
+  }
+  return false;
+}
 
 class ApiClient {
   private getToken(): string | null {
@@ -28,21 +65,21 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
+    let res: Response;
     try {
-      const res = await fetch(`${API_BASE}${endpoint}`, {
-        ...options,
-        headers,
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || `Request failed with status ${res.status}`);
-      }
-      return data;
-    } catch (err: any) {
-      console.warn(`[API] fetch to ${endpoint} failed, checking fallback:`, err.message);
-      throw err;
+      res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+    } catch {
+      throw new ApiError('Cannot reach the Buna server. Make sure the backend is running on port 5000.', 0, true);
     }
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (res.status === 401 && token && typeof window !== 'undefined') {
+        window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+      }
+      throw new ApiError(data.message || `Request failed with status ${res.status}`, res.status, false);
+    }
+    return data;
   }
 
   // Auth
@@ -75,81 +112,31 @@ class ApiClient {
   async getMarketPrices(): Promise<{ success: boolean; data: MarketPrice[]; source: string }> {
     try {
       return await this.request('/market-prices');
-    } catch {
-      // Fallback ECX benchmark data
-      return {
+    } catch (err) {
+      if (!isOffline(err)) throw err;
+            return {
         success: true,
-        source: 'ECX Daily Coffee Floor Benchmark (Jimma Terminal) - Sample Data',
-        data: [
-          {
-            _id: 'mp1',
-            coffeeType: 'Jimma Washed Specialty',
-            processing: 'washed',
-            grade: 'Specialty',
-            currentPricePerKgETB: 450,
-            floorPricePerKgETB: 430,
-            ceilingPricePerKgETB: 480,
-            source: 'ECX Jimma Terminal Benchmark',
-            lastUpdated: new Date().toISOString(),
-            history: [
-              { date: '2026-10-15', pricePerKgETB: 410 },
-              { date: '2026-10-25', pricePerKgETB: 425 },
-              { date: '2026-11-05', pricePerKgETB: 440 },
-              { date: '2026-11-16', pricePerKgETB: 450 },
-            ],
-          },
-          {
-            _id: 'mp2',
-            coffeeType: 'Jimma Washed Grade 1',
-            processing: 'washed',
-            grade: 'Grade 1',
-            currentPricePerKgETB: 410,
-            floorPricePerKgETB: 390,
-            ceilingPricePerKgETB: 435,
-            source: 'ECX Jimma Terminal Benchmark',
-            lastUpdated: new Date().toISOString(),
-            history: [
-              { date: '2026-10-15', pricePerKgETB: 375 },
-              { date: '2026-10-25', pricePerKgETB: 390 },
-              { date: '2026-11-05', pricePerKgETB: 400 },
-              { date: '2026-11-16', pricePerKgETB: 410 },
-            ],
-          },
-          {
-            _id: 'mp3',
-            coffeeType: 'Jimma Natural Grade 1',
-            processing: 'natural',
-            grade: 'Grade 1',
-            currentPricePerKgETB: 385,
-            floorPricePerKgETB: 365,
-            ceilingPricePerKgETB: 410,
-            source: 'ECX Jimma Terminal Benchmark',
-            lastUpdated: new Date().toISOString(),
-            history: [
-              { date: '2026-10-15', pricePerKgETB: 350 },
-              { date: '2026-10-25', pricePerKgETB: 365 },
-              { date: '2026-11-05', pricePerKgETB: 375 },
-              { date: '2026-11-16', pricePerKgETB: 385 },
-            ],
-          },
-          {
-            _id: 'mp4',
-            coffeeType: 'Jimma Washed Grade 2',
-            processing: 'washed',
-            grade: 'Grade 2',
-            currentPricePerKgETB: 370,
-            floorPricePerKgETB: 350,
-            ceilingPricePerKgETB: 390,
-            source: 'ECX Jimma Terminal Benchmark',
-            lastUpdated: new Date().toISOString(),
-            history: [
-              { date: '2026-10-15', pricePerKgETB: 340 },
-              { date: '2026-10-25', pricePerKgETB: 355 },
-              { date: '2026-11-05', pricePerKgETB: 365 },
-              { date: '2026-11-16', pricePerKgETB: 370 },
-            ],
-          },
-        ],
+        source: 'Offline sample data',
+        data: (['washed', 'natural'] as const).flatMap((processing) =>
+          (Object.keys(REFERENCE_PRICES[processing]) as Array<keyof (typeof REFERENCE_PRICES)['washed']>).map((grade) => {
+            const price = REFERENCE_PRICES[processing][grade];
+            return {
+              _id: `mp-${processing}-${grade}`,
+              coffeeType: `Jimma ${processing === 'washed' ? 'Washed' : 'Natural'} ${grade}`,
+              processing,
+              grade,
+              currentPricePerKgETB: price.current,
+              floorPricePerKgETB: price.floor,
+              ceilingPricePerKgETB: price.ceiling,
+              source: PRICE_SOURCE_NOTE,
+              lastUpdated: new Date().toISOString(),
+              history: [0.94, 0.96, 0.98, 1].map((factor, index) => ({
+                date: new Date(Date.now() - (30 - index * 10) * 86400000).toISOString().slice(0, 10),
+                pricePerKgETB: Math.round((price.current * factor) / 5) * 5,
+              })),
+            };
+          })
+        ),
       };
     }
   }
@@ -171,19 +158,20 @@ class ApiClient {
   async getPriceHistory(grade = 'Grade 1', processing = 'washed'): Promise<any> {
     try {
       return await this.request(`/market-prices/history?grade=${grade}&processing=${processing}`);
-    } catch {
+    } catch (err) {
+      if (!isOffline(err)) throw err;
       return {
         success: true,
         coffeeType: `Jimma ${processing} ${grade}`,
         grade,
         processing,
-        currentPrice: 410,
+        currentPrice: 1150,
         history: [
-          { date: '2026-10-16', pricePerKgETB: 380 },
-          { date: '2026-10-23', pricePerKgETB: 388 },
-          { date: '2026-10-30', pricePerKgETB: 395 },
-          { date: '2026-11-06', pricePerKgETB: 402 },
-          { date: '2026-11-13', pricePerKgETB: 410 },
+          { date: '2026-10-16', pricePerKgETB: 1080 },
+          { date: '2026-10-23', pricePerKgETB: 1100 },
+          { date: '2026-10-30', pricePerKgETB: 1115 },
+          { date: '2026-11-06', pricePerKgETB: 1130 },
+          { date: '2026-11-13', pricePerKgETB: 1150 },
         ],
       };
     }
@@ -194,7 +182,8 @@ class ApiClient {
     const qs = new URLSearchParams(params).toString();
     try {
       return await this.request(`/listings?${qs}`);
-    } catch {
+    } catch (err) {
+      if (!isOffline(err)) throw err;
       // Return sample listings
       return {
         success: true,
@@ -210,9 +199,9 @@ class ApiClient {
             processing: 'washed',
             harvestYear: 2026,
             quantityKg: 2500,
-            askingPricePerKg: 460,
-            marketReferencePrice: 450,
-            priceDiffPercentage: 2.2,
+            askingPricePerKg: 1290,
+            marketReferencePrice: 1260,
+            priceDiffPercentage: 2.4,
             isFairPrice: true,
             location: { region: 'Oromia', zone: 'Jimma', woreda: 'Mana', kebele: 'Kenteri' },
             cuppingScore: 88.5,
@@ -232,9 +221,9 @@ class ApiClient {
             processing: 'natural',
             harvestYear: 2026,
             quantityKg: 1800,
-            askingPricePerKg: 390,
-            marketReferencePrice: 385,
-            priceDiffPercentage: 1.3,
+            askingPricePerKg: 1095,
+            marketReferencePrice: 1080,
+            priceDiffPercentage: 1.4,
             isFairPrice: true,
             location: { region: 'Oromia', zone: 'Jimma', woreda: 'Gomma', kebele: 'Genji' },
             cuppingScore: 86.0,
@@ -254,8 +243,8 @@ class ApiClient {
             processing: 'washed',
             harvestYear: 2026,
             quantityKg: 4000,
-            askingPricePerKg: 375,
-            marketReferencePrice: 370,
+            askingPricePerKg: 1055,
+            marketReferencePrice: 1040,
             priceDiffPercentage: 1.4,
             isFairPrice: true,
             location: { region: 'Oromia', zone: 'Jimma', woreda: 'Limmu Kosa', kebele: 'Babu' },
@@ -298,7 +287,8 @@ class ApiClient {
   async getOffers(): Promise<{ success: boolean; data: Offer[] }> {
     try {
       return await this.request('/offers');
-    } catch {
+    } catch (err) {
+      if (!isOffline(err)) throw err;
       return { success: true, data: [] };
     }
   }
@@ -366,7 +356,8 @@ class ApiClient {
   async getFarmerLeaderboard(woreda = 'all'): Promise<{ success: boolean; data: any[] }> {
     try {
       return await this.request(`/leaderboard/farmers?woreda=${woreda}`);
-    } catch {
+    } catch (err) {
+      if (!isOffline(err)) throw err;
       return {
         success: true,
         data: [
@@ -426,7 +417,8 @@ class ApiClient {
   async getBuyerLeaderboard(): Promise<{ success: boolean; data: any[] }> {
     try {
       return await this.request('/leaderboard/buyers');
-    } catch {
+    } catch (err) {
+      if (!isOffline(err)) throw err;
       return {
         success: true,
         data: [
@@ -472,10 +464,15 @@ class ApiClient {
   }
 
   // Admin
+  async getPublicStats(): Promise<{ success: boolean; data: PublicStats }> {
+    return this.request('/stats/public');
+  }
+
   async getAdminStats(): Promise<{ success: boolean; stats: AdminStats; flaggedBuyers: any[]; chartData: any[] }> {
     try {
       return await this.request('/admin/dashboard-stats');
-    } catch {
+    } catch (err) {
+      if (!isOffline(err)) throw err;
       return {
         success: true,
         stats: {
@@ -486,8 +483,8 @@ class ApiClient {
           completedTrades: 6,
           totalKgTraded: 34500,
           totalETBValue: 14350000,
-          avgPricePaid: 415.5,
-          avgMarketPrice: 405.0,
+          avgPricePaid: 1105.5,
+          avgMarketPrice: 1080.0,
           fairnessRatioOverall: 102,
           flaggedBuyersCount: 1,
         },
@@ -502,11 +499,11 @@ class ApiClient {
           },
         ],
         chartData: [
-          { month: 'Jul', marketPrice: 280, paidPrice: 260, fairRatio: 92 },
-          { month: 'Aug', marketPrice: 300, paidPrice: 285, fairRatio: 95 },
-          { month: 'Sep', marketPrice: 315, paidPrice: 310, fairRatio: 98 },
-          { month: 'Oct', marketPrice: 330, paidPrice: 335, fairRatio: 101 },
-          { month: 'Nov', marketPrice: 350, paidPrice: 355, fairRatio: 101 },
+          { month: 'Jul', marketPrice: 900, paidPrice: 830, fairRatio: 92 },
+          { month: 'Aug', marketPrice: 940, paidPrice: 895, fairRatio: 95 },
+          { month: 'Sep', marketPrice: 985, paidPrice: 965, fairRatio: 98 },
+          { month: 'Oct', marketPrice: 1030, paidPrice: 1040, fairRatio: 101 },
+          { month: 'Nov', marketPrice: 1080, paidPrice: 1095, fairRatio: 101 },
         ],
       };
     }
@@ -515,7 +512,8 @@ class ApiClient {
   async getPendingBuyers(): Promise<{ success: boolean; buyers: any[] }> {
     try {
       return await this.request('/admin/buyers/pending');
-    } catch {
+    } catch (err) {
+      if (!isOffline(err)) throw err;
       return {
         success: true,
         buyers: [
@@ -553,6 +551,31 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ action, notes, reason, checklist }),
     });
+  }
+
+  async getAdminUsers(
+    role: 'farmer' | 'buyer',
+    status: 'all' | 'active' | 'removed' = 'all',
+    q = ''
+  ): Promise<{ success: boolean; users: AdminUserRow[] }> {
+    const qs = new URLSearchParams({ role, status, q }).toString();
+    return this.request(`/admin/users?${qs}`);
+  }
+
+  async getAdminTrades(status = 'all'): Promise<{ success: boolean; trades: AdminTradeRow[] }> {
+    return this.request(`/admin/trades?status=${encodeURIComponent(status)}`);
+  }
+
+  async removeUser(userId: string, reason: string): Promise<{ success: boolean; message: string }> {
+    return this.request(`/admin/users/${userId}/remove`, { method: 'POST', body: JSON.stringify({ reason }) });
+  }
+
+  async restoreUser(userId: string): Promise<{ success: boolean; message: string }> {
+    return this.request(`/admin/users/${userId}/restore`, { method: 'POST', body: JSON.stringify({}) });
+  }
+
+  async getAuditLog(): Promise<{ success: boolean; entries: AdminAuditEntry[] }> {
+    return this.request('/admin/audit-log');
   }
 
   async transcribeVoice(payload: { audioBlob?: Blob; audioBase64?: string; language?: string; textHint?: string }): Promise<any> {
@@ -618,15 +641,24 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const res = await fetch(`${API_BASE}/ai/analyze-coffee`, {
-      method: 'POST',
-      headers,
-      body: formData,
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/ai/analyze-coffee`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+    } catch {
+      throw new AiGradingError('The photo could not be sent to the server. Enter the grade and price yourself.', 0);
+    }
 
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(data.message || 'AI analysis failed');
+      throw new AiGradingError(
+        data.message || `AI grading failed (HTTP ${res.status}). Enter the grade and price yourself.`,
+        res.status,
+        data.photoUrl,
+      );
     }
     return data;
   }

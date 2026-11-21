@@ -84,7 +84,7 @@ export class AddisAiService {
             ? 'ይህን ከአማርኛ ቋንቋ ተናጋሪ የቡና ገበሬ የተቀዳ ድምጽ በጥሞና በማዳመጥ በትክክል በአማርኛ ፊደል ጻፈው። ምንም ተጨማሪ ጽሁፍ አትጨምር፣ ትክክለኛውን ንግግር ብቻ ጻፍ።'
             : 'Transcribe this English audio snippet accurately. Return only the transcription.';
 
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${config.geminiApiKey}`;
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${config.geminiModel}:generateContent?key=${config.geminiApiKey}`;
         const geminiRes = await fetch(geminiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -333,7 +333,7 @@ Examples:
 - "100" -> 100
 Return ONLY a valid JSON object: {"number": <int>} or {"number": null} if no number is mentioned. Do not wrap in markdown quotes.`;
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${config.geminiApiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.geminiModel}:generateContent?key=${config.geminiApiKey}`;
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { MarketPrice } from '../models/MarketPrice';
 import { authenticateJWT, AuthenticatedRequest, requireRoles } from '../middleware/authMiddleware';
 import { refreshECXPricesFromInternet } from '../services/ecxPriceService';
+import { PRICE_SOURCE_NOTE } from '../constants/coffeePrices';
 
 const router = Router();
 
@@ -29,7 +30,7 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction): Promis
     res.json({
       success: true,
       data: prices,
-      source: 'ECX Daily Coffee Floor Benchmark (Jimma Terminal) - Sample Data',
+      source: PRICE_SOURCE_NOTE,
       lastRefreshed: new Date(),
     });
   } catch (err) {
