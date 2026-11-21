@@ -1,0 +1,24 @@
+{
+  "grade_tier": "Natural G4",
+  "processing_type": "Natural",
+  "grade_number": 4,
+  "defect_percentage": 20,
+  "color_quality": "fair",
+  "uniformity_score": 5,
+  "moisture_level": "unknown",
+  "confidence": "low",
+  "is_fallback": true,
+  "estimated_price_min_etb": 48,
+  "estimated_price_max_etb": 59,
+  "summary_english": "⚠️ AI grading unavailable — showing median grade. Please try again.",
+  "sorting_advice_english": "Grade manually using ECX defect count chart.",
+  "tips_oromo": [
+    "⚠️ Sirni AI hin hojjanne. Booda yaali.",
+    "Qorannoo idilee irratti irkadhu."
+  ],
+  "tips_amharic": [
+    "⚠️ AI ደረጃ አሰጣጥ አልሰራም። ቆይተህ ሞክር።",
+    "በተለመደ ደረጃ አሰጣጥ ላይ ተመካ።"
+  ],
+  "processing_time_ms": 18226
+}

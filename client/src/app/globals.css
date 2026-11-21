@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 22, 13, 9;
+  --background-rgb: 247, 243, 236;
+  --cherry: #c42e1e;
+  --gold: #c4891f;
+  --forest: #226e46;
+  --espresso: #160d09;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background:
+    radial-gradient(1200px 480px at 90% -10%, rgba(196, 46, 30, 0.07), transparent 55%),
+    radial-gradient(900px 420px at -10% 0%, rgba(34, 110, 70, 0.08), transparent 50%),
+    rgb(var(--background-rgb));
+  font-family: var(--font-jakarta), Inter, system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: #e3b85c;
+  color: #160d09;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #efe6d8;
+}
+::-webkit-scrollbar-thumb {
+  background: #8a6544;
+  border-radius: 999px;
+  border: 2px solid #efe6d8;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #533826;
+}
+
+.glass-panel {
+  background: rgba(251, 248, 243, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(224, 208, 184, 0.8);
+}
+
+.coffee-gradient {
+  background: linear-gradient(145deg, #160d09 0%, #3a261b 55%, #6e4c32 100%);
+}
+
+.forest-gradient {
+  background: linear-gradient(145deg, #091c13 0%, #1c5839 55%, #2f8a58 100%);
+}
+
+.gold-gradient {
+  background: linear-gradient(145deg, #7c5214 0%, #c4891f 55%, #e3b85c 100%);
+}
+
+.brand-stripe {
+  background: linear-gradient(90deg, #226e46 0%, #226e46 33%, #c4891f 33%, #c4891f 66%, #c42e1e 66%, #c42e1e 100%);
+}

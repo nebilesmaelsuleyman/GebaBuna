@@ -1,0 +1,13 @@
+{
+  "name": "buna-fair-price-fullstack",
+  "version": "1.0.0",
+  "description": "Fullstack Buna Fair Price Platform (ቡና ዋጋ) — Jimma Coffee Market Transparency",
+  "scripts": {
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm run dev",
+    "seed": "cd server && npm run seed",
+    "build:server": "cd server && npm run build",
+    "build:client": "cd client && npm run build",
+    "build": "npm run build:server && npm run build:client"
+  }
+}
