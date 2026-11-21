@@ -12,6 +12,8 @@ import {
   AdminUserRow,
   AdminTradeRow,
   AdminAuditEntry,
+  TraceabilityData,
+  BilateralSummary,
 } from '../types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
@@ -90,10 +92,17 @@ class ApiClient {
     });
   }
 
-  async otpLogin(phone: string, code: string): Promise<{ success: boolean; token: string; user: User; note?: string }> {
+  async requestOtp(phone: string): Promise<{ success: boolean; message: string; code: string; phone: string }> {
+    return this.request('/auth/request-otp', {
+      method: 'POST',
+      body: JSON.stringify({ phone }),
+    });
+  }
+
+  async otpLogin(phone: string, code: string, extra?: { role?: string; fullName?: string }): Promise<{ success: boolean; token: string; user: User; note?: string }> {
     return this.request('/auth/otp-login', {
       method: 'POST',
-      body: JSON.stringify({ phone, code }),
+      body: JSON.stringify({ phone, code, ...extra }),
     });
   }
 
@@ -319,11 +328,23 @@ class ApiClient {
   async counterOffer(
     id: string,
     payload: { counterPricePerKg: number; counterQuantityKg?: number; counterMessage?: string }
-  ): Promise<{ success: boolean; offer: any }> {
+  ): Promise<{ success: boolean; offer: any; round?: number; isFinalTurn?: boolean }> {
     return this.request(`/offers/${id}/counter`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  }
+
+  async getTraceabilityProfile(userId: string): Promise<{ success: boolean } & TraceabilityData> {
+    return this.request(`/profiles/traceability/${userId}`);
+  }
+
+  async getBilateralTradeHistory(otherUserId: string): Promise<{
+    success: boolean;
+    trades: any[];
+    summary: BilateralSummary;
+  }> {
+    return this.request(`/trades/bilateral/${otherUserId}`);
   }
 
   async getTrades(): Promise<{ success: boolean; trades: Trade[] }> {

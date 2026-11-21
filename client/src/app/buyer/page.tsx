@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import NextLink from 'next/link';
@@ -22,12 +22,18 @@ import {
   Printer,
   Download,
   AlertTriangle,
+  RotateCcw,
+  Send,
+  History,
+  AlertCircle,
 } from 'lucide-react';
 import ProfileSummaryCard from '../../components/common/ProfileSummaryCard';
+import TraceabilityModal from '../../components/common/TraceabilityModal';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 interface BuyerOfferView {
   _id: string;
+  farmerId: string;
   farmerName: string;
   woreda: string;
   lotTitle: string;
@@ -38,6 +44,11 @@ interface BuyerOfferView {
   status: string;
   fairnessGrade: string;
   paymentTerms: string;
+  round: number;
+  maxRounds: number;
+  currentTurn: 'farmer' | 'buyer';
+  lastActionBy: 'farmer' | 'buyer';
+  negotiationHistory: any[];
 }
 
 interface BuyerTradeView {
@@ -69,7 +80,78 @@ export default function BuyerPortalPage() {
   const [completedTrades, setCompletedTrades] = useState<BuyerTradeView[]>([]);
   const [loading, setLoading] = useState(true);
   const [fairnessScore, setFairnessScore] = useState<number | null>(null);
+  const [verificationStatus, setVerificationStatus] = useState<string>('verified');
   const [error, setError] = useState<string | null>(null);
+
+  // Counter & Traceability States
+  const [counteringOfferId, setCounteringOfferId] = useState<string | null>(null);
+  const [counterPrice, setCounterPrice] = useState<string>('');
+  const [counterMessage, setCounterMessage] = useState<string>('');
+  const [counterSubmitting, setCounterSubmitting] = useState<boolean>(false);
+  const [expandedHistoryOfferId, setExpandedHistoryOfferId] = useState<string | null>(null);
+  const [traceabilityTargetUser, setTraceabilityTargetUser] = useState<{ id: string; name: string } | null>(null);
+
+  const handleAcceptOffer = async (id: string) => {
+    try {
+      await api.acceptOffer(id);
+      setActiveOffers((prev) =>
+        prev.map((o) => (o._id === id ? { ...o, status: 'accepted' } : o))
+      );
+    } catch (err: any) {
+      alert(err.message || 'Could not accept this offer.');
+    }
+  };
+
+  const handleRejectOffer = async (id: string) => {
+    try {
+      await api.rejectOffer(id);
+      setActiveOffers((prev) =>
+        prev.map((o) => (o._id === id ? { ...o, status: 'rejected' } : o))
+      );
+    } catch (err: any) {
+      alert(err.message || 'Could not reject this offer.');
+    }
+  };
+
+  const handleCounterOffer = async (id: string) => {
+    const priceNum = Number(counterPrice);
+    if (!priceNum || priceNum <= 0) {
+      alert('Please enter a valid counter price per kg (ETB).');
+      return;
+    }
+    try {
+      setCounterSubmitting(true);
+      const res = await api.counterOffer(id, {
+        counterPricePerKg: priceNum,
+        counterMessage: counterMessage || undefined,
+      });
+      if (res.success && res.offer) {
+        setActiveOffers((prev) =>
+          prev.map((o) =>
+            o._id === id
+              ? {
+                  ...o,
+                  status: 'countered',
+                  offeredPricePerKg: priceNum,
+                  totalAmountETB: priceNum * o.quantityKg,
+                  round: res.offer.round || (o.round || 1) + 1,
+                  currentTurn: 'farmer',
+                  lastActionBy: 'buyer',
+                  negotiationHistory: res.offer.negotiationHistory || o.negotiationHistory,
+                }
+              : o
+          )
+        );
+        setCounteringOfferId(null);
+        setCounterPrice('');
+        setCounterMessage('');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Could not submit counter-offer.');
+    } finally {
+      setCounterSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     async function loadData() {
@@ -80,26 +162,39 @@ export default function BuyerPortalPage() {
           api.getTrades(),
         ]);
         api.getMe().then((me: any) => setFairnessScore(me.profile?.fairnessScore ?? null)).catch(() => setFairnessScore(null));
+        api.getBuyerProfile().then((res: any) => {
+          if (res.profile?.verificationStatus) {
+            setVerificationStatus(res.profile.verificationStatus);
+          }
+        }).catch(() => {});
 
         if (offersRes.success && offersRes.offers) {
-          const viewOffers: BuyerOfferView[] = (offersRes.offers as Offer[]).map((o) => {
+          const viewOffers: BuyerOfferView[] = (offersRes.offers as any[]).map((o) => {
             const listing: any = o.listing;
             const farmer: any = o.farmer;
             const buyerProfile: any = o.buyerProfile;
+            const activePrice = o.currentPricePerKg || o.counterPricePerKg || o.offeredPricePerKg;
+            const activeQty = o.currentQuantityKg || o.counterQuantityKg || o.offeredQuantityKg || o.quantityKg || 1;
             return {
               _id: o._id,
+              farmerId: farmer?._id || farmer || '',
               farmerName: farmer?.fullName || 'Verified Farmer',
               woreda: listing?.location?.woreda || 'Jimma',
               lotTitle: listing?.coffeeType || listing?.title || 'Coffee Lot',
-              offeredPricePerKg: o.offeredPricePerKg,
-              marketFloor: o.marketReferencePrice,
-              quantityKg: o.offeredQuantityKg,
-              totalAmountETB: o.totalAmountETB,
+              offeredPricePerKg: activePrice,
+              marketFloor: o.marketPriceAtOffer || o.marketReferencePrice || 0,
+              quantityKg: activeQty,
+              totalAmountETB: activePrice * activeQty,
               status: o.status,
               fairnessGrade: buyerProfile?.fairnessScore
                 ? buyerProfile.fairnessScore >= 90 ? 'A+' : buyerProfile.fairnessScore >= 80 ? 'A' : 'B'
                 : 'A',
-              paymentTerms: o.proposedPaymentTerms || 'Payment terms per contract',
+              paymentTerms: o.proposedPaymentTerms || o.message || 'Payment terms per contract',
+              round: o.round || 1,
+              maxRounds: o.maxRounds || 3,
+              currentTurn: o.currentTurn || (o.status === 'countered' ? (o.counteredBy === 'farmer' ? 'buyer' : 'farmer') : 'farmer'),
+              lastActionBy: o.lastActionBy || o.counteredBy || 'buyer',
+              negotiationHistory: o.negotiationHistory || [],
             };
           });
           setActiveOffers(viewOffers);
@@ -188,6 +283,32 @@ export default function BuyerPortalPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-10 space-y-10">
+      {/* Pending Verification Notice Banner */}
+      {verificationStatus !== 'verified' && (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 sm:p-5 text-amber-900 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="font-bold text-sm sm:text-base text-amber-950 flex items-center gap-2">
+                <span>Account Status: {(verificationStatus || 'pending').toUpperCase()} REVIEW</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-200 text-amber-900">
+                  Awaiting System Admin Approval
+                </span>
+              </div>
+              <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                Your buyer profile is currently pending official verification by the System Admin. Under regional coffee export standards, market purchasing and offer placement require an approved Trade License & TIN. Please complete any remaining details and upload your documents.
+              </p>
+            </div>
+          </div>
+          <NextLink
+            href="/buyer/profile"
+            className="px-4 py-2.5 rounded-xl bg-forest-700 hover:bg-forest-800 text-white font-bold text-xs shrink-0 transition-colors shadow-sm flex items-center gap-1.5"
+          >
+            <span>Complete Profile & Upload Documents →</span>
+          </NextLink>
+        </div>
+      )}
+
       {/* Buyer Profile Header */}
       <ProfileSummaryCard
         avatar={user?.avatar}
@@ -196,19 +317,26 @@ export default function BuyerPortalPage() {
         name={user?.fullName || 'Oromia Coffee Farmers Cooperative Union'}
         badge={<span className="flex items-center gap-1 rounded-full bg-forest-600 px-2.5 py-1 text-[11px] font-bold text-white shadow"><ShieldCheck className="h-3.5 w-3.5" />Buyer Account</span>}
         details={<span className="font-bold text-gold-300">Representative: {user?.fullName || 'Buyer account'}</span>}
-        actions={<><NextLink
-            href="/buyer/profile"
-            className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-3 text-xs font-bold text-white shadow-md transition-colors hover:bg-white/15"
-          >Edit buyer profile</NextLink><NextLink
-            href="/marketplace"
-            className="flex items-center gap-2 rounded-full bg-cherry-600 px-5 py-3 text-xs font-bold text-white shadow-md transition-colors hover:bg-cherry-500"
-          >
-            <Store className="w-4 h-4" />
-            <span>Browse Open Harvests</span>
-          </NextLink></>}
+        actions={
+          <div className="flex flex-wrap items-center gap-2.5">
+            <NextLink
+              href="/buyer/profile"
+              className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-3 text-xs font-bold text-white shadow-md transition-colors hover:bg-white/15"
+            >
+              Edit buyer profile
+            </NextLink>
+            <NextLink
+              href="/marketplace"
+              className="flex items-center gap-2 rounded-full bg-cherry-600 px-5 py-3 text-xs font-bold text-white shadow-md transition-colors hover:bg-cherry-500"
+            >
+              <Store className="w-4 h-4" />
+              <span>Browse Open Harvests</span>
+            </NextLink>
+          </div>
+        }
         stats={[
           { label: 'Fairness Score', value: fairnessScore != null ? `${Math.round(fairnessScore)}%` : '—', detail: 'From your trades and farmer reviews', tone: 'green' },
-          { label: 'Total Volume Bought', value: <>{completedTrades.reduce((sum, t) => sum + (Number(t.quantityKg) || 0), 0).toLocaleString()} <small className="text-sm font-semibold">kg</small></>, detail: 'Smallholder lots', tone: 'light' },
+          { label: 'Total Volume Bought', value: `${completedTrades.reduce((sum, t) => sum + (Number(t.quantityKg) || 0), 0).toLocaleString()} kg`, detail: 'Smallholder lots', tone: 'light' },
           { label: 'Trades At or Above Floor', value: floorSharePct != null ? `${floorSharePct}%` : '—', detail: `${tradesAtOrAboveFloor} of ${completedTrades.length} trades`, tone: 'gold' },
           { label: 'Active Offers', value: activeOffers.length, detail: 'Pending farmer response', tone: 'green' },
         ]}
@@ -240,32 +368,111 @@ export default function BuyerPortalPage() {
             {activeOffers.map((offer) => (
               <div
                 key={offer._id}
-                className="bg-white rounded-2xl border border-coffee-200 p-5 shadow-sm space-y-4"
+                className={`bg-white rounded-2xl border p-5 shadow-sm space-y-4 transition-all ${
+                  offer.status === 'accepted'
+                    ? 'border-forest-400 bg-forest-50/20'
+                    : offer.status === 'rejected'
+                    ? 'border-red-300 opacity-60'
+                    : 'border-coffee-200 hover:shadow-md'
+                }`}
               >
-                <div className="flex justify-between items-start">
+                {/* Header */}
+                <div className="flex justify-between items-start gap-2">
                   <div>
                     <h3 className="font-bold text-coffee-950 text-sm">{offer.lotTitle}</h3>
-                    <span className="text-xs text-coffee-600">
+                    <span className="text-xs text-coffee-600 block mt-0.5">
                       Farmer: <strong>{offer.farmerName}</strong> ({offer.woreda})
                     </span>
                   </div>
-                  <span
-                    className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                      offer.status === 'accepted'
-                        ? 'bg-forest-600 text-white'
-                        : 'bg-amber-100 text-amber-900'
-                    }`}
-                  >
-                    {offer.status}
-                  </span>
+
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <span className="px-2.5 py-1 rounded-full bg-coffee-950 text-gold-300 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 border border-coffee-800">
+                      <RotateCcw className="w-3 h-3 text-gold-400" />
+                      Round {offer.round || 1}/3
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                        offer.status === 'accepted'
+                          ? 'bg-forest-600 text-white'
+                          : offer.status === 'rejected'
+                          ? 'bg-red-600 text-white'
+                          : 'bg-amber-100 text-amber-900'
+                      }`}
+                    >
+                      {offer.status}
+                    </span>
+                  </div>
                 </div>
 
+                {/* Farmer Traceability Button */}
+                {offer.farmerId && (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setTraceabilityTargetUser({
+                          id: offer.farmerId,
+                          name: offer.farmerName,
+                        })
+                      }
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-forest-50 hover:bg-forest-100 border border-forest-200 text-forest-800 text-[11px] font-bold transition-colors"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-forest-600" />
+                      Farmer Traceability & Past History
+                    </button>
+                  </div>
+                )}
+
+                {/* Multi-Round Progress Tracker */}
+                <div className="p-2.5 rounded-xl bg-coffee-50 border border-coffee-200/80 text-[11px] space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px] uppercase font-bold text-coffee-600">
+                    <span>Negotiation Protocol (Max 3 Rounds)</span>
+                    <span className="text-coffee-900 font-extrabold">Turn {offer.round || 1} of 3</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5 text-center">
+                    <div
+                      className={`p-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                        (offer.round || 1) >= 1
+                          ? 'bg-coffee-900 text-cream-50 shadow-xs'
+                          : 'bg-coffee-200/50 text-coffee-500'
+                      }`}
+                    >
+                      R1: Your Bid
+                    </div>
+                    <div
+                      className={`p-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                        (offer.round || 1) >= 2
+                          ? 'bg-coffee-900 text-cream-50 shadow-xs'
+                          : 'bg-coffee-200/50 text-coffee-500'
+                      }`}
+                    >
+                      R2: Farmer Counter
+                    </div>
+                    <div
+                      className={`p-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                        (offer.round || 1) >= 3
+                          ? 'bg-amber-700 text-cream-50 shadow-xs ring-1 ring-amber-400'
+                          : 'bg-coffee-200/50 text-coffee-500'
+                      }`}
+                    >
+                      R3: Final Turn
+                    </div>
+                  </div>
+                </div>
+
+                {/* Price & Contract Value */}
                 <div className="p-3.5 rounded-xl bg-coffee-50 border border-coffee-100 grid grid-cols-2 gap-2 text-xs">
                   <div>
-                    <span className="text-coffee-500 text-[10px] block">Offered Rate:</span>
-                    <span className="text-lg font-bold text-coffee-950">{offer.offeredPricePerKg} ETB/kg</span>
+                    <span className="text-coffee-500 text-[10px] block">
+                      {offer.status === 'countered' && offer.lastActionBy === 'farmer'
+                        ? "Farmer's Counter Price:"
+                        : 'Active Proposed Rate:'}
+                    </span>
+                    <span className="text-lg font-bold text-coffee-950">
+                      {offer.offeredPricePerKg} ETB/kg
+                    </span>
                     <span className="text-[10px] text-forest-700 block">
-                      +{offer.offeredPricePerKg - offer.marketFloor} ETB above floor
+                      +{offer.offeredPricePerKg - offer.marketFloor} ETB above ECX reference
                     </span>
                   </div>
                   <div>
@@ -273,7 +480,9 @@ export default function BuyerPortalPage() {
                     <span className="text-lg font-bold text-forest-800">
                       {(Number(offer.totalAmountETB) || 0).toLocaleString()} ETB
                     </span>
-                    <span className="text-[10px] text-coffee-500 block">({offer.quantityKg} kg)</span>
+                    <span className="text-[10px] text-coffee-500 block">
+                      ({offer.quantityKg?.toLocaleString()} kg)
+                    </span>
                   </div>
                 </div>
 
@@ -281,14 +490,206 @@ export default function BuyerPortalPage() {
                   <strong>Terms:</strong> {offer.paymentTerms}
                 </div>
 
+                {/* Expandable Negotiation Timeline */}
+                {offer.negotiationHistory && offer.negotiationHistory.length > 0 && (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedHistoryOfferId(
+                          expandedHistoryOfferId === offer._id ? null : offer._id
+                        )
+                      }
+                      className="text-[11px] font-bold text-coffee-700 hover:text-coffee-950 flex items-center gap-1 transition-colors"
+                    >
+                      <History className="w-3 h-3 text-coffee-500" />
+                      {expandedHistoryOfferId === offer._id
+                        ? 'Hide Negotiation Timeline'
+                        : `View Negotiation Timeline (${offer.negotiationHistory.length} turns)`}
+                    </button>
+
+                    {expandedHistoryOfferId === offer._id && (
+                      <div className="mt-2 p-3 rounded-xl bg-coffee-50/70 border border-coffee-200 space-y-2 text-[11px]">
+                        {offer.negotiationHistory.map((step: any, idx: number) => (
+                          <div
+                            key={idx}
+                            className="flex items-start justify-between border-b border-coffee-200/50 pb-1.5 last:border-0 last:pb-0"
+                          >
+                            <div>
+                              <span className="font-bold text-coffee-900">
+                                {step.senderName ||
+                                  (step.senderRole === 'buyer' ? 'You (Buyer)' : 'Farmer')}
+                                :
+                              </span>{' '}
+                              <span className="text-coffee-800">
+                                {step.action === 'accepted'
+                                  ? 'Accepted proposal'
+                                  : step.action === 'rejected'
+                                  ? 'Declined deal'
+                                  : `Offered ${step.pricePerKg} ETB/kg`}
+                              </span>
+                              {step.message && (
+                                <p className="text-[10px] text-coffee-500 italic mt-0.5">
+                                  &ldquo;{step.message}&rdquo;
+                                </p>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-coffee-400 whitespace-nowrap ml-2">
+                              Round {step.round}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Actions & Interactive Counter Form */}
+                {(offer.status === 'pending' || offer.status === 'countered') && (
+                  <div>
+                    {offer.currentTurn === 'buyer' ? (
+                      <div>
+                        {counteringOfferId === offer._id ? (
+                          <div className="p-3.5 rounded-xl bg-amber-50/90 border border-amber-200 space-y-3 text-xs">
+                            <span className="font-bold text-coffee-950 block">
+                              Submit Counter-Offer (Round {(offer.round || 1) + 1} of 3)
+                            </span>
+                            <p className="text-[11px] text-coffee-600">
+                              Propose your adjusted price (Statutory protection floor:{' '}
+                              {offer.marketFloor} ETB/kg).
+                            </p>
+                            <div className="space-y-2">
+                              <div>
+                                <label className="text-[10px] font-bold text-coffee-700 block mb-0.5">
+                                  Your Counter Price (ETB / Kg):
+                                </label>
+                                <input
+                                  type="number"
+                                  placeholder={`e.g. ${offer.offeredPricePerKg - 25}`}
+                                  value={counterPrice}
+                                  onChange={(e) => setCounterPrice(e.target.value)}
+                                  className="w-full bg-white border border-coffee-300 rounded-lg px-3 py-1.5 text-xs font-bold text-coffee-950 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-bold text-coffee-700 block mb-0.5">
+                                  Counter Note / Justification (Optional):
+                                </label>
+                                <input
+                                  type="text"
+                                  placeholder="e.g. Direct pickup at Mana warehouse, immediate payment"
+                                  value={counterMessage}
+                                  onChange={(e) => setCounterMessage(e.target.value)}
+                                  className="w-full bg-white border border-coffee-300 rounded-lg px-3 py-1.5 text-xs text-coffee-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                />
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 pt-1">
+                              <button
+                                onClick={() => handleCounterOffer(offer._id)}
+                                disabled={counterSubmitting}
+                                className="flex-1 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-colors"
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                                {counterSubmitting
+                                  ? 'Submitting...'
+                                  : `Send Counter-Offer (Round ${(offer.round || 1) + 1}/3)`}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setCounteringOfferId(null);
+                                  setCounterPrice('');
+                                  setCounterMessage('');
+                                }}
+                                className="px-3.5 py-2 rounded-xl border border-coffee-300 text-coffee-700 text-xs font-semibold hover:bg-coffee-100 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-2 pt-2 border-t border-coffee-100">
+                            {offer.round >= 3 && (
+                              <div className="p-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-semibold flex items-center gap-1.5">
+                                <AlertCircle className="w-4 h-4 text-amber-700 flex-shrink-0" />
+                                <span>
+                                  Final Round (Round 3 of 3 reached): Counter-offers are disabled.
+                                  You must Accept or Decline.
+                                </span>
+                              </div>
+                            )}
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleAcceptOffer(offer._id)}
+                                className="flex-1 py-2 rounded-xl bg-forest-600 hover:bg-forest-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                              >
+                                <CheckCircle2 className="w-4 h-4" />
+                                Accept Farmer&apos;s Counter ({offer.offeredPricePerKg} ETB)
+                              </button>
+
+                              {offer.round < 3 ? (
+                                <button
+                                  onClick={() => {
+                                    setCounteringOfferId(offer._id);
+                                    setCounterPrice(String(Math.max(offer.marketFloor, offer.offeredPricePerKg - 30)));
+                                  }}
+                                  className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-coffee-950 font-bold text-xs flex items-center justify-center gap-1 transition-colors shadow-sm"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                  Counter-Offer
+                                </button>
+                              ) : (
+                                <button
+                                  disabled
+                                  className="px-3 py-2 rounded-xl bg-coffee-100 text-coffee-400 font-semibold text-xs cursor-not-allowed border border-coffee-200"
+                                  title="Counter limit (3 rounds) reached"
+                                >
+                                  Counter Limit (3/3)
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => handleRejectOffer(offer._id)}
+                                className="px-3.5 py-2 rounded-xl border border-red-300 text-red-700 hover:bg-red-50 font-semibold text-xs transition-colors"
+                              >
+                                Decline
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-xl bg-coffee-50 border border-coffee-200 text-coffee-700 text-xs flex items-center justify-between">
+                        <span className="flex items-center gap-1.5 font-medium">
+                          <Clock className="w-4 h-4 text-coffee-500" />
+                          Awaiting Farmer&apos;s response (Round {offer.round}/3).
+                        </span>
+                        <button
+                          onClick={() => handleRejectOffer(offer._id)}
+                          className="text-[11px] text-red-600 hover:underline font-bold"
+                        >
+                          Withdraw Offer
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {offer.status === 'accepted' && (
                   <div className="pt-2 border-t border-coffee-100 flex items-center justify-between text-xs">
                     <span className="text-forest-700 font-bold flex items-center gap-1">
-                      <CheckCircle2 className="w-4 h-4 text-forest-600" /> Contract Active
+                      <CheckCircle2 className="w-4 h-4 text-forest-600" /> Contract Active 🎉
                     </span>
                     <button className="px-3 py-1.5 rounded-lg bg-coffee-900 text-white font-medium text-xs flex items-center gap-1">
                       <Download className="w-3.5 h-3.5" /> Download Agreement
                     </button>
+                  </div>
+                )}
+
+                {offer.status === 'rejected' && (
+                  <div className="p-2 rounded-xl bg-red-50 text-red-800 text-[11px] font-semibold text-center">
+                    Negotiation Closed — Deal Declined.
                   </div>
                 )}
               </div>
@@ -305,7 +706,7 @@ export default function BuyerPortalPage() {
               Contract Performance & Smallholder Impact Report Cards
             </h2>
             <p className="text-xs text-coffee-600">
-              Official verified receipts logged on the Jimma Regional Agriculture Bureau system.
+              Official verified receipts logged on the System Admin platform.
             </p>
           </div>
         </div>
@@ -370,6 +771,16 @@ export default function BuyerPortalPage() {
           </div>
         )}
       </div>
+
+      {/* Farmer Traceability & Past History Modal */}
+      {traceabilityTargetUser && (
+        <TraceabilityModal
+          userId={traceabilityTargetUser.id}
+          userName={traceabilityTargetUser.name}
+          userRole="farmer"
+          onClose={() => setTraceabilityTargetUser(null)}
+        />
+      )}
     </div>
   );
 }

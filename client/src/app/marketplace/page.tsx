@@ -19,8 +19,13 @@ import {
   Send,
   ShieldCheck,
   ArrowUpDown,
+  History,
+  RotateCcw,
+  ArrowRight,
 } from 'lucide-react';
+import Link from 'next/link';
 import VoiceInputButton from '../../components/common/VoiceInputButton';
+import TraceabilityModal from '../../components/common/TraceabilityModal';
 
 export default function MarketplacePage() {
   const { t } = useLanguage();
@@ -31,6 +36,7 @@ export default function MarketplacePage() {
   const [selectedWoreda, setSelectedWoreda] = useState<string>('all');
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
   const [selectedProcessing, setSelectedProcessing] = useState<string>('all');
+  const [buyerVerificationStatus, setBuyerVerificationStatus] = useState<string | null>(null);
 
   // Modal State
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
@@ -41,10 +47,25 @@ export default function MarketplacePage() {
   const [offerSuccessMsg, setOfferSuccessMsg] = useState<string | null>(null);
   const [offerError, setOfferError] = useState<string | null>(null);
   const [offerSubmitting, setOfferSubmitting] = useState<boolean>(false);
+  const [traceabilityTargetUser, setTraceabilityTargetUser] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     loadListings();
   }, [selectedWoreda, selectedGrade, selectedProcessing]);
+
+  useEffect(() => {
+    if (role === 'buyer') {
+      api.getBuyerProfile()
+        .then((res) => {
+          setBuyerVerificationStatus(res.profile?.verificationStatus || 'pending');
+        })
+        .catch(() => {
+          setBuyerVerificationStatus('pending');
+        });
+    } else {
+      setBuyerVerificationStatus(null);
+    }
+  }, [role]);
 
   async function loadListings() {
     setLoading(true);
@@ -127,6 +148,33 @@ export default function MarketplacePage() {
           </p>
         </div>
       </div>
+
+      {/* Buyer Verification Status Alert */}
+      {role === 'buyer' && buyerVerificationStatus && buyerVerificationStatus !== 'verified' && (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 sm:p-5 text-amber-900 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="font-bold text-sm sm:text-base text-amber-950 flex items-center gap-2">
+                <span>Account Status: Pending System Admin Verification</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-200 text-amber-900">
+                  {buyerVerificationStatus}
+                </span>
+              </div>
+              <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                Your buyer account is currently in pending verification. You can browse certified harvests and price floor references, but under regional regulations, price negotiation and offer submissions are restricted until your trade license and TIN are verified by the System Admin.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/buyer/profile"
+            className="px-4 py-2.5 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs shrink-0 transition-colors shadow-sm flex items-center gap-1.5"
+          >
+            <span>Complete Profile in Dashboard</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="bg-white rounded-2xl border border-coffee-200 p-4 shadow-sm space-y-4">
@@ -270,8 +318,24 @@ export default function MarketplacePage() {
                     {lot.title}
                   </h3>
 
-                  <div className="text-xs text-coffee-600">
-                    Farmer: <strong className="text-coffee-900">{lot.farmer.fullName}</strong>
+                  <div className="flex items-center justify-between text-xs text-coffee-600">
+                    <div>
+                      Farmer: <strong className="text-coffee-900">{lot.farmer.fullName}</strong>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTraceabilityTargetUser({
+                          id: lot.farmer._id,
+                          name: lot.farmer.fullName,
+                        });
+                      }}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-forest-700 hover:text-forest-900 bg-forest-50 hover:bg-forest-100 px-2 py-0.5 rounded-lg border border-forest-200 transition-colors"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-forest-600" />
+                      Traceability & Trades
+                    </button>
                   </div>
 
                   {/* Lot specs */}
@@ -330,23 +394,17 @@ export default function MarketplacePage() {
         </div>
       )}
 
-      {/* Offer Submission Modal */}
+      {/* Offer Submission Modal (Unclipped & Vertically Scrollable with Sticky Footer) */}
       {selectedListing && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl border border-coffee-200 relative animate-in fade-in zoom-in-95 duration-200">
-            <button
-              onClick={() => setSelectedListing(null)}
-              className="absolute top-5 right-5 p-2 rounded-full hover:bg-coffee-100 text-coffee-500 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="space-y-6">
-              <div>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-coffee-200 overflow-hidden relative animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="px-6 py-4 sm:py-5 border-b border-coffee-100 flex-shrink-0 flex items-start justify-between gap-3 bg-white">
+              <div className="pr-4">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-gold-600">
-                  Direct Coffee Offer
+                  Direct Coffee Contract & Negotiation
                 </span>
-                <h3 className="text-xl font-extrabold text-coffee-950">
+                <h3 className="text-lg sm:text-xl font-extrabold text-coffee-950">
                   Offer to {selectedListing.farmer.fullName}
                 </h3>
                 <p className="text-xs text-coffee-600">
@@ -354,16 +412,110 @@ export default function MarketplacePage() {
                 </p>
               </div>
 
-              {offerSuccessMsg ? (
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setTraceabilityTargetUser({
+                      id: selectedListing.farmer._id,
+                      name: selectedListing.farmer.fullName,
+                    })
+                  }
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-forest-50 hover:bg-forest-100 border border-forest-200 text-forest-800 text-xs font-bold transition-colors shadow-sm shrink-0"
+                >
+                  <ShieldCheck className="w-4 h-4 text-forest-600" />
+                  <span className="hidden sm:inline">Traceability</span>
+                </button>
+                <button
+                  onClick={() => setSelectedListing(null)}
+                  className="p-1.5 rounded-full hover:bg-coffee-100 text-coffee-500 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body: Scrollable */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 text-xs">
+              {/* Multi-Round Negotiation Rule Info Banner */}
+              <div className="p-3 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-amber-950 text-xs space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                  <RotateCcw className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Negotiation Protocol: Round 1 of 3</span>
+                </div>
+                <p className="text-[11px] text-amber-900/90 leading-relaxed">
+                  Farmer asking price is <strong>{selectedListing.askingPricePerKg} ETB/kg</strong>. You can accept this price immediately to close the deal, or propose a counter-offer. A maximum of <strong>3 negotiation rounds</strong> is enforced. On round 3, counter-offers are disabled and the deal must be accepted or rejected.
+                </p>
+              </div>
+
+              {role === 'buyer' && buyerVerificationStatus && buyerVerificationStatus !== 'verified' ? (
+                <div className="p-6 rounded-2xl bg-amber-50 border border-amber-200 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
+                    <AlertTriangle className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-coffee-950">Verification Required to Submit Offers</h4>
+                    <p className="text-xs text-coffee-600 mt-1 max-w-sm mx-auto leading-relaxed">
+                      Your buyer account is currently in <strong>{buyerVerificationStatus.toUpperCase()}</strong> status. In compliance with regional coffee marketing regulations, offers and contracts can only be submitted by verified buyers.
+                    </p>
+                  </div>
+                  <div className="pt-2 flex flex-col sm:flex-row justify-center gap-2">
+                    <Link
+                      href="/buyer/profile"
+                      className="px-4 py-2.5 rounded-xl bg-forest-700 hover:bg-forest-800 text-white font-bold text-xs shadow-sm transition-colors"
+                    >
+                      Complete Profile on Dashboard →
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedListing(null)}
+                      className="px-4 py-2.5 rounded-xl border border-coffee-300 text-coffee-700 hover:bg-coffee-50 font-semibold text-xs transition-colors"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              ) : offerSuccessMsg ? (
                 <div className="p-6 rounded-2xl bg-forest-50 border border-forest-200 text-center space-y-2">
                   <CheckCircle2 className="w-8 h-8 text-forest-600 mx-auto" />
                   <p className="text-sm font-bold text-forest-900">{offerSuccessMsg}</p>
                 </div>
               ) : (
-                <form onSubmit={handleSubmitOffer} className="space-y-4 text-xs">
+                <form id="offerForm" onSubmit={handleSubmitOffer} className="space-y-4">
                   {offerError && (
                     <div className="rounded-xl border border-cherry-200 bg-cherry-50 px-3 py-2 text-sm text-cherry-800">{offerError}</div>
                   )}
+
+                  {/* Quick Price Strategy Buttons */}
+                  <div className="flex items-center gap-2 pt-1 pb-1">
+                    <button
+                      type="button"
+                      onClick={() => setOfferPrice(selectedListing.askingPricePerKg)}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+                        offerPrice === selectedListing.askingPricePerKg
+                          ? 'bg-forest-600 text-white border-forest-600 shadow-sm'
+                          : 'bg-coffee-50 hover:bg-coffee-100 text-coffee-800 border-coffee-200'
+                      }`}
+                    >
+                      ✓ Match Asking Price ({selectedListing.askingPricePerKg} ETB)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const floor = floorFor(selectedListing.marketReferencePrice);
+                        const discountPrice = Math.max(floor, selectedListing.askingPricePerKg - 50);
+                        setOfferPrice(discountPrice);
+                      }}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+                        offerPrice < selectedListing.askingPricePerKg
+                          ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
+                          : 'bg-coffee-50 hover:bg-coffee-100 text-coffee-800 border-coffee-200'
+                      }`}
+                    >
+                      ⚡ Counter-Offer (-50 ETB)
+                    </button>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="font-semibold text-coffee-900 block mb-1">
@@ -468,29 +620,42 @@ export default function MarketplacePage() {
                       className="w-full bg-coffee-50/50 border border-coffee-300 rounded-xl px-3.5 py-2 text-xs text-coffee-900 focus:outline-none focus:ring-2 focus:ring-gold-500"
                     />
                   </div>
-
-                  <div className="pt-2 flex gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedListing(null)}
-                      className="w-1/3 py-2.5 rounded-xl border border-coffee-300 text-coffee-800 font-semibold hover:bg-coffee-50 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={offerSubmitting}
-                      className="w-2/3 py-2.5 rounded-xl bg-forest-700 hover:bg-forest-600 text-white font-bold tracking-wide shadow-md flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
-                    >
-                      <Send className="w-4 h-4" />
-                      {offerSubmitting ? 'Transmitting...' : 'Send Offer to Farmer'}
-                    </button>
-                  </div>
                 </form>
               )}
             </div>
+
+            {/* Modal Sticky Footer */}
+            {(!role || role !== 'buyer' || buyerVerificationStatus === 'verified') && !offerSuccessMsg && (
+              <div className="px-6 py-4 border-t border-coffee-100 bg-coffee-50/70 flex-shrink-0 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedListing(null)}
+                  className="w-1/3 py-2.5 rounded-xl border border-coffee-300 text-coffee-800 font-semibold hover:bg-coffee-100 transition-colors text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  form="offerForm"
+                  disabled={offerSubmitting}
+                  className="w-2/3 py-2.5 rounded-xl bg-forest-700 hover:bg-forest-600 text-white font-bold tracking-wide shadow-md flex items-center justify-center gap-2 transition-colors disabled:opacity-50 text-xs"
+                >
+                  <Send className="w-4 h-4" />
+                  {offerSubmitting ? 'Transmitting...' : 'Send Offer to Farmer'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
+      )}
+      {/* Traceability & Counterparty Background Modal */}
+      {traceabilityTargetUser && (
+        <TraceabilityModal
+          userId={traceabilityTargetUser.id}
+          userName={traceabilityTargetUser.name}
+          userRole="farmer"
+          onClose={() => setTraceabilityTargetUser(null)}
+        />
       )}
     </div>
   );

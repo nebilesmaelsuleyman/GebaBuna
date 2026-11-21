@@ -29,6 +29,53 @@ router.get('/', authenticateJWT, async (req: AuthenticatedRequest, res: Response
 });
 
 /**
+ * GET /api/v1/trades/bilateral/:otherUserId
+ * History of all trades done between the authenticated user and another farmer/buyer
+ */
+router.get(
+  '/bilateral/:otherUserId',
+  authenticateJWT,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const currentUserId = req.user!._id;
+      const otherUserId = req.params.otherUserId;
+
+      const trades = await Trade.find({
+        $or: [
+          { farmer: currentUserId, buyer: otherUserId },
+          { buyer: currentUserId, farmer: otherUserId },
+        ],
+      })
+        .populate('listing', 'coffeeType grade processing askingPricePerKg quantityKg photos location harvestYear')
+        .populate('farmer', 'fullName phone email avatar')
+        .populate('buyer', 'fullName phone email avatar')
+        .sort({ createdAt: -1 });
+
+      const completedTrades = trades.filter((t) => ['completed', 'paid', 'delivered'].includes(t.status));
+      const totalKgTraded = completedTrades.reduce((sum, t) => sum + (t.agreedQuantityKg || 0), 0);
+      const totalETBTraded = completedTrades.reduce((sum, t) => sum + (t.totalAmountETB || 0), 0);
+      const averagePricePerKg = totalKgTraded > 0 ? Math.round(totalETBTraded / totalKgTraded) : 0;
+
+      res.json({
+        success: true,
+        trades,
+        summary: {
+          totalTradesCount: trades.length,
+          completedTradesCount: completedTrades.length,
+          totalKgTraded,
+          totalETBTraded,
+          averagePricePerKg,
+          lastTradeDate: trades.length > 0 ? trades[0].createdAt : null,
+          isEstablishedPartner: completedTrades.length > 0,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
  * GET /api/v1/trades/:id
  */
 router.get('/:id', authenticateJWT, async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {

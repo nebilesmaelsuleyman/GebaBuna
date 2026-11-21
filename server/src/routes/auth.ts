@@ -102,8 +102,8 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
 
     const user = await User.create({
       fullName: validated.fullName,
-      email: normalizedEmail,
-      phone: normalizedPhone,
+      email: normalizedEmail || undefined,
+      phone: normalizedPhone || undefined,
       passwordHash,
       role: validated.role,
       preferredLanguage: validated.preferredLanguage,
@@ -111,8 +111,9 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
     });
 
     // Create corresponding profile
+    let profileData: any = null;
     if (validated.role === 'farmer') {
-      await FarmerProfile.create({
+      profileData = await FarmerProfile.create({
         user: user._id,
         fullName: validated.fullName,
         phone: normalizedPhone || '+251 900 000 000',
@@ -129,15 +130,15 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
         qualityRank: 1,
       });
     } else if (validated.role === 'buyer') {
-      await BuyerProfile.create({
+      profileData = await BuyerProfile.create({
         user: user._id,
-        companyName: validated.companyName || `${validated.fullName} Coffee Export`,
+        companyName: validated.companyName || `${validated.fullName} Coffee`,
         ownerName: validated.fullName,
         phone: normalizedPhone || '+251 911 000 000',
         email: normalizedEmail || `${user._id}@bunafairprice.et`,
         businessType: validated.businessType || 'exporter',
-        tradeLicenseNumber: validated.tradeLicenseNumber || 'ET-JIM-2024-PENDING',
-        tinNumber: validated.tinNumber || '0098765432',
+        tradeLicenseNumber: validated.tradeLicenseNumber || 'PENDING_UPLOAD',
+        tinNumber: validated.tinNumber || 'PENDING_UPLOAD',
         verificationStatus: 'pending',
         fairnessScore: 85,
         fairnessRank: 1,
@@ -169,6 +170,7 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
         role: user.role,
         preferredLanguage: user.preferredLanguage,
         avatar: user.avatar,
+        profile: profileData,
       },
     });
   } catch (err) {
@@ -268,13 +270,39 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction): P
 });
 
 /**
+ * POST /api/v1/auth/request-otp
+ * Simulates dispatching an SMS OTP code.
+ * For hackathon demo, code is 123456 for all accounts.
+ */
+router.post('/request-otp', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      res.status(400).json({ success: false, message: 'Phone number is required.' });
+      return;
+    }
+    const normalized = normalizeEthiopianPhone(phone);
+    res.json({
+      success: true,
+      message: `SMS OTP simulated to ${normalized}`,
+      code: '123456',
+      phone: normalized,
+      expiresIn: '10 minutes',
+      note: 'Demo universal code: 123456 is identical for all accounts.',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * POST /api/v1/auth/otp-login
  * Clearly marked phone OTP login placeholder for Ethiopian farmers.
  * Demo stub accepts code "123456".
  */
 router.post('/otp-login', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { phone, code } = req.body;
+    const { phone, code, role, fullName } = req.body;
 
     if (!phone) {
       res.status(400).json({ success: false, message: 'Phone number is required.' });
@@ -288,7 +316,7 @@ router.post('/otp-login', async (req: Request, res: Response, next: NextFunction
     if (code !== '123456') {
       res.status(400).json({
         success: false,
-        message: 'Invalid SMS verification code. (For hackathon demo, use 123456)',
+        message: 'Invalid SMS verification code. (For demo, use 123456)',
       });
       return;
     }
@@ -296,32 +324,51 @@ router.post('/otp-login', async (req: Request, res: Response, next: NextFunction
     let user = await User.findOne({ phone: normalizedPhone });
 
     if (!user) {
-      // Auto-register farmer on first OTP login
+      // Auto-register user on first OTP login or registration
+      const selectedRole = role === 'buyer' ? 'buyer' : 'farmer';
+      const userFullName = fullName?.trim() || (selectedRole === 'buyer' ? `Buyer ${normalizedPhone.slice(-4)}` : `Farmer ${normalizedPhone.slice(-4)}`);
+
       const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash('buna_otp_farmer_2026', salt);
+      const passwordHash = await bcrypt.hash('buna_otp_user_2026', salt);
 
       user = await User.create({
-        fullName: `Farmer ${normalizedPhone.slice(-4)}`,
+        fullName: userFullName,
         phone: normalizedPhone,
         passwordHash,
-        role: 'farmer',
+        role: selectedRole,
         preferredLanguage: 'om',
         avatar: '',
       });
 
-      await FarmerProfile.create({
-        user: user._id,
-        fullName: user.fullName,
-        phone: normalizedPhone,
-        region: 'Oromia',
-        zone: 'Jimma',
-        woreda: 'Mana',
-        kebele: 'Kenteri',
-        farmSizeHectares: 2.0,
-        coffeeVarieties: ['Jimma Heirloom'],
-        processingMethods: ['natural', 'washed'],
-        preferredLanguage: 'om',
-      });
+      if (selectedRole === 'buyer') {
+        await BuyerProfile.create({
+          user: user._id,
+          companyName: `${userFullName} Coffee`,
+          ownerName: userFullName,
+          phone: normalizedPhone,
+          email: `${user._id}@bunafairprice.et`,
+          businessType: 'exporter',
+          tradeLicenseNumber: 'PENDING_UPLOAD',
+          tinNumber: 'PENDING_UPLOAD',
+          verificationStatus: 'pending',
+          fairnessScore: 85,
+          fairnessRank: 1,
+        });
+      } else {
+        await FarmerProfile.create({
+          user: user._id,
+          fullName: user.fullName,
+          phone: normalizedPhone,
+          region: 'Oromia',
+          zone: 'Jimma',
+          woreda: 'Mana',
+          kebele: 'Kenteri',
+          farmSizeHectares: 2.0,
+          coffeeVarieties: ['Jimma Heirloom'],
+          processingMethods: ['natural', 'washed'],
+          preferredLanguage: 'om',
+        });
+      }
     }
 
     if (!user.isActive) {
@@ -332,6 +379,14 @@ router.post('/otp-login', async (req: Request, res: Response, next: NextFunction
       return;
     }
 
+    // Fetch profile data
+    let profileData: any = null;
+    if (user.role === 'farmer') {
+      profileData = await FarmerProfile.findOne({ user: user._id });
+    } else if (user.role === 'buyer') {
+      profileData = await BuyerProfile.findOne({ user: user._id });
+    }
+
     const token = jwt.sign(
       { id: user._id, role: user.role },
       config.jwtSecret,
@@ -340,15 +395,17 @@ router.post('/otp-login', async (req: Request, res: Response, next: NextFunction
 
     res.json({
       success: true,
-      message: 'Farmer phone authenticated via OTP stub',
+      message: 'Phone authenticated successfully via SMS code',
       token,
       user: {
         id: user._id,
         fullName: user.fullName,
+        email: user.email,
         phone: user.phone,
         role: user.role,
         preferredLanguage: user.preferredLanguage,
         avatar: user.avatar,
+        profile: profileData,
       },
       note: 'In production, SMS OTP is routed via Ethio Telecom Shortcode.',
     });

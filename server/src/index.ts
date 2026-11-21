@@ -21,6 +21,7 @@ import botRoutes from './routes/bot';
 import voiceRoutes from './routes/voice';
 import aiAnalysisRoutes from './routes/aiAnalysis';
 import statsRoutes from './routes/stats';
+import { TelegramBotService } from './services/telegramBotService';
 
 const app = express();
 
@@ -84,6 +85,11 @@ const startServer = async () => {
     app.listen(config.port, () => {
       console.log(`☕ [Buna Fair Price Server] Running on http://localhost:${config.port}`);
       console.log(`📡 [API Base]: http://localhost:${config.port}/api/v1`);
+      
+      // Start BunaJimma Telegram Bot
+      TelegramBotService.start().catch((botErr) => {
+        console.warn('⚠️ [TelegramBot] Failed to initialize bot:', botErr.message);
+      });
     });
   } catch (err: any) {
     console.error('❌ Failed to start server:', err.message);

@@ -1,8 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { authenticateJWT, AuthenticatedRequest, requireRoles } from '../middleware/authMiddleware';
+import { authenticateJWT, optionalAuthenticateJWT, AuthenticatedRequest, requireRoles } from '../middleware/authMiddleware';
 import { FarmerProfile } from '../models/FarmerProfile';
 import { BuyerProfile } from '../models/BuyerProfile';
 import { User } from '../models/User';
+import { Trade } from '../models/Trade';
 import { upload, getFileUrl } from '../middleware/uploadMiddleware';
 import fs from 'fs';
 
@@ -230,7 +231,7 @@ router.post(
 
       res.json({
         success: true,
-        message: 'Document uploaded successfully and queued for regional bureau verification.',
+        message: 'Document uploaded successfully and queued for System Admin verification.',
         fileUrl,
         profile,
       });
@@ -268,5 +269,101 @@ router.get('/public/:userId', async (req: Request, res: Response, next: NextFunc
     next(err);
   }
 });
+
+/**
+ * GET /api/v1/profiles/traceability/:userId
+ * Full traceability profile including proven platform trade log and bilateral history
+ */
+router.get(
+  '/traceability/:userId',
+  optionalAuthenticateJWT,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const targetUser = await User.findById(req.params.userId).select('fullName role avatar phone email createdAt');
+      if (!targetUser) {
+        res.status(404).json({ success: false, message: 'User not found' });
+        return;
+      }
+
+      let profile: any = null;
+      if (targetUser.role === 'farmer') {
+        profile = await FarmerProfile.findOne({ user: targetUser._id }).select('-estimatedCostPerKg');
+      } else if (targetUser.role === 'buyer') {
+        profile = await BuyerProfile.findOne({ user: targetUser._id }).select('-verificationChecklist -adminNotes');
+      }
+
+      // Query all completed trades on the platform for this user
+      const isFarmerTarget = targetUser.role === 'farmer';
+      const tradeQuery = isFarmerTarget
+        ? { farmer: targetUser._id, status: { $in: ['completed', 'paid', 'delivered', 'agreed'] } }
+        : { buyer: targetUser._id, status: { $in: ['completed', 'paid', 'delivered', 'agreed'] } };
+
+      const allTrades = await Trade.find(tradeQuery)
+        .populate('listing', 'coffeeType grade processing quantityKg photos location')
+        .populate('farmer', 'fullName phone avatar')
+        .populate('buyer', 'fullName phone avatar')
+        .sort({ completedAt: -1, createdAt: -1 });
+
+      const completedOnly = allTrades.filter((t) => ['completed', 'paid'].includes(t.status));
+      const totalKgTraded = completedOnly.reduce((sum, t) => sum + (t.agreedQuantityKg || 0), 0);
+      const totalETBTraded = completedOnly.reduce((sum, t) => sum + (t.totalAmountETB || 0), 0);
+
+      // Check bilateral trades with currently logged-in user if available
+      let bilateralTrades: any[] = [];
+      let bilateralSummary = {
+        totalTradesCount: 0,
+        completedTradesCount: 0,
+        totalKgTraded: 0,
+        totalETBTraded: 0,
+        averagePricePerKg: 0,
+        lastTradeDate: null as Date | null,
+        isEstablishedPartner: false,
+      };
+
+      if (req.user && req.user._id.toString() !== targetUser._id.toString()) {
+        const requesterId = req.user._id;
+        bilateralTrades = await Trade.find({
+          $or: [
+            { farmer: requesterId, buyer: targetUser._id },
+            { buyer: requesterId, farmer: targetUser._id },
+          ],
+        })
+          .populate('listing', 'coffeeType grade processing quantityKg photos location harvestYear')
+          .sort({ createdAt: -1 });
+
+        const bilateralCompleted = bilateralTrades.filter((t) => ['completed', 'paid', 'delivered'].includes(t.status));
+        const bilateralKg = bilateralCompleted.reduce((sum, t) => sum + (t.agreedQuantityKg || 0), 0);
+        const bilateralETB = bilateralCompleted.reduce((sum, t) => sum + (t.totalAmountETB || 0), 0);
+
+        bilateralSummary = {
+          totalTradesCount: bilateralTrades.length,
+          completedTradesCount: bilateralCompleted.length,
+          totalKgTraded: bilateralKg,
+          totalETBTraded: bilateralETB,
+          averagePricePerKg: bilateralKg > 0 ? Math.round(bilateralETB / bilateralKg) : 0,
+          lastTradeDate: bilateralTrades.length > 0 ? bilateralTrades[0].createdAt : null,
+          isEstablishedPartner: bilateralCompleted.length > 0,
+        };
+      }
+
+      res.json({
+        success: true,
+        user: targetUser,
+        profile,
+        traceability: {
+          totalTradesCount: allTrades.length,
+          completedTradesCount: completedOnly.length,
+          totalKgTraded,
+          totalETBTraded,
+          completedTrades: allTrades,
+        },
+        bilateral: bilateralSummary,
+        bilateralTrades,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 export default router;

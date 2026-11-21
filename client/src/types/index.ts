@@ -140,37 +140,109 @@ export interface Listing {
   createdAt: string;
 }
 
+export interface NegotiationTurn {
+  round: number;
+  senderRole: 'farmer' | 'buyer';
+  senderId?: string;
+  senderName: string;
+  action: 'initial_offer' | 'counter_offer' | 'accepted' | 'rejected';
+  pricePerKg: number;
+  quantityKg: number;
+  totalAmountETB: number;
+  message?: string;
+  createdAt: string;
+}
+
 export interface Offer {
   _id: string;
-  listing: Listing | string;
+  listing: Listing | any;
   buyer: {
     _id: string;
     fullName: string;
     phone: string;
     email: string;
+    avatar?: string;
   };
   buyerProfile?: {
+    _id?: string;
     companyName: string;
     businessType: string;
     fairnessScore: number;
+    fairnessRank?: number;
     verificationStatus: string;
+    averageRatingFromFarmers?: number;
   };
   farmer: {
     _id: string;
     fullName: string;
     phone: string;
+    avatar?: string;
   };
   offeredPricePerKg: number;
-  offeredQuantityKg: number;
-  totalAmountETB: number;
-  marketReferencePrice: number;
-  isFairOffer: boolean;
-  fairnessIndicator: 'above_market' | 'fair_market' | 'below_floor';
+  quantityKg?: number;
+  offeredQuantityKg?: number;
+  totalPriceETB?: number;
+  totalAmountETB?: number;
+  marketReferencePrice?: number;
+  marketPriceAtOffer?: number;
+  isFairOffer?: boolean;
+  fairnessStatus?: string;
+  fairnessPercentage?: number;
+  fairnessIndicator?: 'above_market' | 'fair_market' | 'below_floor';
   status: OfferStatus;
-  proposedPaymentTerms: string;
-  proposedDeliveryLocation: string;
+  // Multi-round negotiation fields (max 3 rounds)
+  round?: number;
+  maxRounds?: number;
+  currentTurn?: 'farmer' | 'buyer';
+  currentPricePerKg?: number;
+  currentQuantityKg?: number;
+  lastActionBy?: 'farmer' | 'buyer';
+  negotiationHistory?: NegotiationTurn[];
+  // Counter-offer fields
+  counterPricePerKg?: number;
+  counterQuantityKg?: number;
+  counterMessage?: string;
+  counteredBy?: 'farmer' | 'buyer';
+  counteredAt?: string;
+  message?: string;
+  deliveryTerms?: string;
+  proposedPaymentTerms?: string;
+  proposedDeliveryLocation?: string;
   farmerResponseNote?: string;
   createdAt: string;
+  updatedAt?: string;
+}
+
+export interface BilateralSummary {
+  totalTradesCount: number;
+  completedTradesCount: number;
+  totalKgTraded: number;
+  totalETBTraded: number;
+  averagePricePerKg: number;
+  lastTradeDate: string | null;
+  isEstablishedPartner: boolean;
+}
+
+export interface TraceabilityData {
+  user: {
+    _id: string;
+    fullName: string;
+    role: Role;
+    avatar?: string;
+    phone?: string;
+    email?: string;
+    createdAt: string;
+  };
+  profile: (FarmerProfile & BuyerProfile) | any;
+  traceability: {
+    totalTradesCount: number;
+    completedTradesCount: number;
+    totalKgTraded: number;
+    totalETBTraded: number;
+    completedTrades: any[];
+  };
+  bilateral: BilateralSummary;
+  bilateralTrades: any[];
 }
 
 export interface Trade {

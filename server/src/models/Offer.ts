@@ -4,6 +4,19 @@ import { PriceFairnessStatus } from './Listing';
 export type OfferStatus = 'pending' | 'accepted' | 'rejected' | 'countered' | 'withdrawn';
 export type DeliveryTerm = 'buyer_pickup' | 'farmer_delivery' | 'cooperative_warehouse';
 
+export interface INegotiationTurn {
+  round: number;
+  senderRole: 'farmer' | 'buyer';
+  senderId?: mongoose.Types.ObjectId;
+  senderName: string;
+  action: 'initial_offer' | 'counter_offer' | 'accepted' | 'rejected';
+  pricePerKg: number;
+  quantityKg: number;
+  totalAmountETB: number;
+  message?: string;
+  createdAt: Date;
+}
+
 export interface IOffer extends Document {
   listing: mongoose.Types.ObjectId;
   farmer: mongoose.Types.ObjectId;
@@ -15,7 +28,15 @@ export interface IOffer extends Document {
   message?: string;
   deliveryTerms: DeliveryTerm;
   status: OfferStatus;
-  // Counter-offer fields
+  // Multi-round negotiation fields (max 3 rounds)
+  round: number;
+  maxRounds: number;
+  currentTurn: 'farmer' | 'buyer';
+  currentPricePerKg: number;
+  currentQuantityKg: number;
+  lastActionBy?: 'farmer' | 'buyer';
+  negotiationHistory: INegotiationTurn[];
+  // Legacy / convenience counter-offer fields
   counterPricePerKg?: number;
   counterQuantityKg?: number;
   counterMessage?: string;
@@ -83,6 +104,50 @@ const OfferSchema = new Schema<IOffer>(
       default: 'pending',
       index: true,
     },
+    // Multi-round negotiation fields (max 3 rounds)
+    round: {
+      type: Number,
+      default: 1,
+      min: 1,
+      max: 3,
+    },
+    maxRounds: {
+      type: Number,
+      default: 3,
+    },
+    currentTurn: {
+      type: String,
+      enum: ['farmer', 'buyer'],
+      default: 'farmer',
+    },
+    currentPricePerKg: {
+      type: Number,
+    },
+    currentQuantityKg: {
+      type: Number,
+    },
+    lastActionBy: {
+      type: String,
+      enum: ['farmer', 'buyer'],
+    },
+    negotiationHistory: [
+      {
+        round: { type: Number, required: true },
+        senderRole: { type: String, enum: ['farmer', 'buyer'], required: true },
+        senderId: { type: Schema.Types.ObjectId, ref: 'User' },
+        senderName: { type: String, required: true },
+        action: {
+          type: String,
+          enum: ['initial_offer', 'counter_offer', 'accepted', 'rejected'],
+          required: true,
+        },
+        pricePerKg: { type: Number, required: true },
+        quantityKg: { type: Number, required: true },
+        totalAmountETB: { type: Number, required: true },
+        message: { type: String, default: '' },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
     counterPricePerKg: {
       type: Number,
     },

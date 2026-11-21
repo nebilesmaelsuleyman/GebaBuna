@@ -13,6 +13,8 @@ export const config = {
   botApiKey: process.env.BOT_API_KEY || 'buna_bot_secure_api_key_jimma_2026',
   clientUrl: process.env.CLIENT_URL || 'http://localhost:3000',
   uploadDir: path.resolve(__dirname, '../../uploads'),
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
+  telegramBotEnabled: process.env.ENABLE_TELEGRAM_BOT !== 'false',
   addisApiKey: process.env.ADDIS_API_KEY || '',
   geminiApiKey: process.env.GEMINI_API_KEY3 || process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY2 || '',
   // Photo grading tries each key in this order when one fails (KEY3 is the paid Pro account)

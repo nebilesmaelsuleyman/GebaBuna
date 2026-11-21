@@ -28,6 +28,8 @@ if str(REPO_ROOT) not in sys.path:
 from telegram import (
     BotCommand,
     ReplyKeyboardRemove,
+    ReplyKeyboardMarkup,
+    KeyboardButton,
     Update,
     constants,
 )
@@ -143,6 +145,71 @@ def build_fallback_grade_result() -> GradeResult:
     return result
 
 
+def get_main_menu_keyboard(lang: str = "om") -> ReplyKeyboardMarkup:
+    if lang == "am":
+        buttons = [
+            ["☕ ቡና መሸጥ (Voice)", "📸 የቡና ጥራት መርምር"],
+            ["📊 የገበያ ዋጋ (ECX)", "🌐 ቋንቋ ቀይር"],
+        ]
+    elif lang == "en":
+        buttons = [
+            ["☕ Sell Coffee (Voice)", "📸 AI Photo Grader"],
+            ["📊 Today's Prices", "🌐 Change Language"],
+        ]
+    else:
+        buttons = [
+            ["☕ Buna Gurguri (Voice)", "📸 Suuraa Qori (Photo)"],
+            ["📊 Gatii Har'aa (ECX)", "🌐 Afaan Jijjiiri"],
+        ]
+    return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
+
+
+async def send_sell_voice_prompt(message, lang: str) -> None:
+    if lang == "am":
+        text = (
+            "☕ <b>ቡናዎን ለመሸጥ የቀረበ ጥሪ (የድምፅ ረዳት)</b>\n\n"
+            "🎙️ <b>እባክዎ የሚከተሉትን በድምፅ ይንገሩኝ:</b>\n"
+            "1. የቡናውን አይነት (ጀንፈል ወይስ የታጠበ ደረጃ 1–5)\n"
+            "2. ስንት ኪሎ እንዳለዎት\n"
+            "3. የአንዱን ኪሎ ዋጋ በስንት መሸጥ እንደሚፈልጉ\n\n"
+            "🗣️ <i>ለምሳሌ: 'የጀንፈል ደረጃ 2 ቡና 500 ኪሎ በ1,100 ብር መሸጥ እፈልጋለሁ'</i>\n\n"
+            "👇 አሁን የቴሌግራም ማይክራፎኑን ተጭነው ድምጽዎን ይላኩ:"
+        )
+    elif lang == "en":
+        text = (
+            "☕ <b>SELL YOUR COFFEE (VOICE AGENT)</b>\n\n"
+            "🎙️ <b>Speak to the bot in a voice note:</b>\n"
+            "1. Coffee grade/type\n"
+            "2. Quantity (kg)\n"
+            "3. Your asking price per kg\n\n"
+            "🗣️ <i>Example: 'I want to sell 500 kg of Natural G2 at 1,100 ETB'</i>\n\n"
+            "👇 Send your voice note now:"
+        )
+    else:
+        text = (
+            "☕ <b>BUNA KOO GURGURUU BARBAADA (VOICE AGENT)</b>\n\n"
+            "🎙️ <b>Maaloo sagalee keessaniin naaf himaa:</b>\n"
+            "1. Akaakuu bunaa (Natural / Dhiqamaa G1–G5)\n"
+            "2. Kiiloo meeqa akka qabdan\n"
+            "3. Gatii meeqaan akka gurguruu barbaaddan\n\n"
+            "🗣️ <i>Fakkeenya: 'Buna Natural G2 kiiloo 500 qarshii 1,100n gurguruun barbaada'</i>\n\n"
+            "👇 Amma mallattoo maaykiroofoonii cuqaasaatii sagalee keessan ergaa:"
+        )
+    await message.reply_html(text)
+    try:
+        spoken = (
+            "Baga nagaan dhuftan! Buna keessan gurguruuf kiiloo meeqa akka qabdanii fi gatii meeqaan gurguruu barbaaddan sagaleedhaan naaf himaa."
+            if lang != "am"
+            else "እንኳን ደህና መጡ! ቡናዎን ለመሸጥ ስንት ኪሎ እንዳለዎት እና በስንት መሸጥ እንደሚፈልጉ በድምፅ ይንገሩኝ።"
+        )
+        audio = await voice_service.synthesize(spoken, lang=lang if lang in ("om", "am") else "om")
+        if audio:
+            audio_bytes, mime = audio
+            await message.reply_voice(voice=io.BytesIO(audio_bytes))
+    except Exception as exc:
+        logger.warning("Spoken prompt failed: %s", exc)
+
+
 # ── Command Handlers ──────────────────────────────────────────────────────────
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /start command: Welcome farmer and offer language selection."""
@@ -155,7 +222,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     if update.message:
         await update.message.reply_html(welcome_msg, reply_markup=keyboard)
-        await update.message.reply_html(get_text("send_photo_prompt", lang=lang))
+        await update.message.reply_html(
+            "👇 <b>Maaloo afaan filadhaa / እባክዎ ቋንቋ ይምረጡ / Please choose your language:</b>",
+            reply_markup=get_main_menu_keyboard(lang),
+        )
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -199,16 +269,31 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def fallback_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle non-command text messages with useful guidance."""
+    """Handle non-command text messages with useful guidance and menu routing."""
     message = update.message
     if not message:
         return
 
     user_id = update.effective_user.id if update.effective_user else 0
     lang = prefs.get_lang(user_id)
+    text = (message.text or "").strip()
+    lower = text.lower()
+
+    if any(k in lower for k in ("gurgur", "sell", "መሸጥ")):
+        await send_sell_voice_prompt(message, lang)
+        return
+    if any(k in lower for k in ("suuraa", "photo", "ጥራት", "ፎቶ")):
+        await message.reply_html(get_text("send_photo_prompt", lang=lang))
+        return
+    if any(k in lower for k in ("gatii", "price", "ዋጋ", "ecx")):
+        await price_command(update, context)
+        return
+    if any(k in lower for k in ("afaan", "lang", "ቋንቋ")):
+        await language_command(update, context)
+        return
 
     # Typed questions use the same agent as voice notes (price questions, sell offers)
-    answer = await voice_service.answer(message.text or "", lang, ECX_PRICES)
+    answer = await voice_service.answer(text, lang, ECX_PRICES)
     if answer.intent.intent in ("price", "sell"):
         await message.reply_html(answer.text)
         await offer_listing(message, answer.intent, lang)
@@ -479,10 +564,16 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         new_lang = data.split(":", 1)[1]
         prefs.set_lang(user_id, new_lang)
         confirm_text = get_text("lang_changed", lang=new_lang)
-        prompt_photo = get_text("send_photo_prompt", lang=new_lang)
-        await query.edit_message_text(
-            f"{confirm_text}\n\n{prompt_photo}",
-            parse_mode=constants.ParseMode.HTML,
+        prompt_sell = (
+            "☕ <b>Buna keessan gurguruuf 'Buna Gurguri' kan jedhu cuqaasaa yookaan sagalee ergaa!</b>"
+            if new_lang == "om"
+            else "☕ <b>ቡናዎን ለመሸጥ 'ቡና መሸጥ' የሚለውን ይጫኑ ወይም በድምፅ ይናገሩ!</b>"
+            if new_lang == "am"
+            else "☕ <b>Tap 'Sell Coffee' or speak into the mic to list your coffee!</b>"
+        )
+        await query.message.reply_html(
+            f"{confirm_text}\n\n{prompt_sell}",
+            reply_markup=get_main_menu_keyboard(new_lang),
         )
 
     # 2. View specific result in an alternate language

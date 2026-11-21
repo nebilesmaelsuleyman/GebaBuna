@@ -89,7 +89,7 @@ export default function AdminPortalPage() {
       } catch (err: any) {
         setLoadError(
           err?.status === 401 || err?.status === 403
-            ? 'Sign in as the Jimma Agri Bureau admin to see live statistics.'
+            ? 'Sign in as System Admin to see live statistics.'
             : err?.message || 'Could not load admin statistics.'
         );
       }
@@ -101,7 +101,7 @@ export default function AdminPortalPage() {
 
   const handleApproveBuyer = async (id: string, name: string) => {
     try {
-      await api.verifyBuyer(id, 'approve', 'Approved by Jimma Bureau officer', '', {
+      await api.verifyBuyer(id, 'approve', 'Approved by System Admin', '', {
         validTradeLicense: true,
         validExportLicense: true,
         tinValid: true,
@@ -163,17 +163,17 @@ export default function AdminPortalPage() {
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-extrabold text-white">
-                  Jimma Zone Agriculture & Natural Resources Bureau
+                  System Admin
                 </h1>
                 <span className="px-2.5 py-0.5 rounded-full bg-red-800 text-red-100 text-xs font-bold">
-                  Official Oversight
+                  System Administration
                 </span>
               </div>
               <p className="text-xs text-coffee-200">
-                Oromia Regional Government • Smallholder Coffee Price Protection & Verification Registry
+                GebaBuna Coffee Platform Governance • Smallholder Price Protection & Buyer Verification Registry
               </p>
               <div className="text-[11px] text-gold-300 font-medium">
-                Officer: {user?.fullName || 'Not signed in'}
+                Administrator: {user?.fullName || 'Not signed in'}
               </div>
             </div>
           </div>
@@ -315,7 +315,7 @@ export default function AdminPortalPage() {
                 ) : (
                   <div className="text-xs text-forest-700 font-bold flex items-center gap-1.5 pt-1">
                     <CheckCircle2 className="w-4 h-4" />
-                    Verification decision logged into regional smallholder registry.
+                    Verification decision logged into platform registry.
                   </div>
                 )}
               </div>

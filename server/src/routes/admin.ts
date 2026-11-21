@@ -140,7 +140,7 @@ router.post(
         type: notifType,
         title:
           newStatus === 'verified'
-            ? 'Account Verified by Jimma Agriculture Bureau!'
+            ? 'Account Verified by System Admin!'
             : `Verification ${newStatus.toUpperCase()}`,
         message:
           newStatus === 'verified'

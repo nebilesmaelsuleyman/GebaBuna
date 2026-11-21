@@ -26,6 +26,11 @@ import {
   Brain,
   Pencil,
   Trash2,
+  RotateCcw,
+  ShieldCheck,
+  History,
+  Send,
+  AlertCircle,
 } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import VoiceInputButton from '../../components/common/VoiceInputButton'
@@ -33,6 +38,7 @@ import AIAnalysisModal from '../../components/farmer/AIAnalysisModal';
 import { ManualGradeResult } from '../../components/farmer/ManualGradeForm';
 import VoiceListingAssistant from '../../components/farmer/VoiceListingAssistant';
 import ProfileSummaryCard from '../../components/common/ProfileSummaryCard';
+import TraceabilityModal from '../../components/common/TraceabilityModal';
 
 export default function FarmerPortalPage() {
   const { user } = useAuth();
@@ -48,6 +54,14 @@ export default function FarmerPortalPage() {
   const [incomingOffers, setIncomingOffers] = useState<any[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  // Counter & Traceability States
+  const [counteringOfferId, setCounteringOfferId] = useState<string | null>(null);
+  const [counterPrice, setCounterPrice] = useState<string>('');
+  const [counterMessage, setCounterMessage] = useState<string>('');
+  const [counterSubmitting, setCounterSubmitting] = useState<boolean>(false);
+  const [expandedHistoryOfferId, setExpandedHistoryOfferId] = useState<string | null>(null);
+  const [traceabilityTargetUser, setTraceabilityTargetUser] = useState<{ id: string; name: string } | null>(null);
 
   // Create Listing Modal
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -130,17 +144,23 @@ export default function FarmerPortalPage() {
           setIncomingOffers(
             incomingOffersRes.offers.map((offer: any) => ({
               _id: offer._id,
+              buyerId: offer.buyer?._id || offer.buyer,
               buyerName: offer.buyerProfile?.companyName || offer.buyer?.fullName || 'Verified Buyer',
               companyType: offer.buyerProfile?.businessType || 'Commercial Buyer',
               fairnessScore: offer.buyerProfile?.fairnessScore || Math.round(offer.fairnessPercentage || 85),
               listingTitle: offer.listing?.coffeeType || 'Coffee lot',
-              offeredPricePerKg: offer.counterPricePerKg || offer.offeredPricePerKg,
+              offeredPricePerKg: offer.currentPricePerKg || offer.counterPricePerKg || offer.offeredPricePerKg,
               marketPrice: offer.marketPriceAtOffer,
-              quantityKg: offer.counterQuantityKg || offer.quantityKg,
+              quantityKg: offer.currentQuantityKg || offer.counterQuantityKg || offer.quantityKg,
               totalAmountETB:
-                (offer.counterPricePerKg || offer.offeredPricePerKg) *
-                (offer.counterQuantityKg || offer.quantityKg),
+                (offer.currentPricePerKg || offer.counterPricePerKg || offer.offeredPricePerKg) *
+                (offer.currentQuantityKg || offer.counterQuantityKg || offer.quantityKg),
               status: offer.status,
+              round: offer.round || 1,
+              maxRounds: offer.maxRounds || 3,
+              currentTurn: offer.currentTurn || (offer.status === 'countered' ? (offer.counteredBy === 'farmer' ? 'buyer' : 'farmer') : 'farmer'),
+              lastActionBy: offer.lastActionBy || offer.counteredBy || 'buyer',
+              negotiationHistory: offer.negotiationHistory || [],
               isFair: offer.fairnessStatus !== 'very_low',
               paymentTerms: offer.message || 'Payment terms shared in buyer message',
               deliveryLocation: offer.deliveryTerms || 'Negotiable',
@@ -220,6 +240,48 @@ export default function FarmerPortalPage() {
       );
     } catch (error: any) {
       alert(error.message || 'Could not reject this offer.');
+    }
+  };
+
+  const handleCounterOffer = async (id: string) => {
+    const priceNum = Number(counterPrice);
+    if (!priceNum || priceNum <= 0) {
+      alert('Please enter a valid counter price per kg (ETB).');
+      return;
+    }
+
+    try {
+      setCounterSubmitting(true);
+      const res = await api.counterOffer(id, {
+        counterPricePerKg: priceNum,
+        counterMessage: counterMessage || undefined,
+      });
+
+      if (res.success && res.offer) {
+        setIncomingOffers((prev) =>
+          prev.map((o) =>
+            o._id === id
+              ? {
+                  ...o,
+                  status: 'countered',
+                  offeredPricePerKg: priceNum,
+                  totalAmountETB: priceNum * o.quantityKg,
+                  round: res.offer.round || (o.round || 1) + 1,
+                  currentTurn: 'buyer',
+                  lastActionBy: 'farmer',
+                  negotiationHistory: res.offer.negotiationHistory || o.negotiationHistory,
+                }
+              : o
+          )
+        );
+        setCounteringOfferId(null);
+        setCounterPrice('');
+        setCounterMessage('');
+      }
+    } catch (error: any) {
+      alert(error.message || 'Could not submit counter-offer.');
+    } finally {
+      setCounterSubmitting(false);
     }
   };
 
@@ -464,28 +526,93 @@ export default function FarmerPortalPage() {
                   : 'border-coffee-200 hover:shadow-md'
               }`}
             >
-              <div className="flex justify-between items-start">
+              {/* Card Header */}
+              <div className="flex justify-between items-start gap-2">
                 <div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <h3 className="font-bold text-coffee-950 text-sm">{offer.buyerName}</h3>
                     <span className="px-2 py-0.5 rounded-full bg-forest-100 text-forest-800 text-[10px] font-bold">
                       Fair Buyer {offer.fairnessScore}%
                     </span>
                   </div>
-                  <span className="text-[11px] text-coffee-500">{offer.companyType} • {offer.createdAt}</span>
+                  <span className="text-[11px] text-coffee-500 block mt-0.5">
+                    {offer.companyType} • {offer.createdAt}
+                  </span>
                 </div>
 
-                <span
-                  className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                    offer.status === 'accepted'
-                      ? 'bg-forest-600 text-white'
-                      : offer.status === 'rejected'
-                      ? 'bg-red-600 text-white'
-                      : 'bg-amber-100 text-amber-900'
-                  }`}
-                >
-                  {offer.status}
-                </span>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <span className="px-2.5 py-1 rounded-full bg-coffee-950 text-gold-300 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 border border-coffee-800">
+                    <RotateCcw className="w-3 h-3 text-gold-400" />
+                    Round {offer.round || 1}/3
+                  </span>
+                  <span
+                    className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                      offer.status === 'accepted'
+                        ? 'bg-forest-600 text-white'
+                        : offer.status === 'rejected'
+                        ? 'bg-red-600 text-white'
+                        : 'bg-amber-100 text-amber-900'
+                    }`}
+                  >
+                    {offer.status}
+                  </span>
+                </div>
+              </div>
+
+              {/* Traceability Button */}
+              {offer.buyerId && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setTraceabilityTargetUser({
+                        id: offer.buyerId,
+                        name: offer.buyerName,
+                      })
+                    }
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-forest-50 hover:bg-forest-100 border border-forest-200 text-forest-800 text-[11px] font-bold transition-colors"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 text-forest-600" />
+                    Buyer Background & Past Trades
+                  </button>
+                </div>
+              )}
+
+              {/* Multi-Round Progress Tracker */}
+              <div className="p-2.5 rounded-xl bg-coffee-50 border border-coffee-200/80 text-[11px] space-y-1.5">
+                <div className="flex items-center justify-between text-[10px] uppercase font-bold text-coffee-600">
+                  <span>Negotiation Protocol (Max 3 Rounds)</span>
+                  <span className="text-coffee-900 font-extrabold">Turn {offer.round || 1} of 3</span>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5 text-center">
+                  <div
+                    className={`p-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                      (offer.round || 1) >= 1
+                        ? 'bg-coffee-900 text-cream-50 shadow-xs'
+                        : 'bg-coffee-200/50 text-coffee-500'
+                    }`}
+                  >
+                    R1: Buyer Offer
+                  </div>
+                  <div
+                    className={`p-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                      (offer.round || 1) >= 2
+                        ? 'bg-coffee-900 text-cream-50 shadow-xs'
+                        : 'bg-coffee-200/50 text-coffee-500'
+                    }`}
+                  >
+                    R2: Farmer Counter
+                  </div>
+                  <div
+                    className={`p-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                      (offer.round || 1) >= 3
+                        ? 'bg-amber-700 text-cream-50 shadow-xs ring-1 ring-amber-400'
+                        : 'bg-coffee-200/50 text-coffee-500'
+                    }`}
+                  >
+                    R3: Final Turn
+                  </div>
+                </div>
               </div>
 
               {/* Offer Details */}
@@ -493,7 +620,11 @@ export default function FarmerPortalPage() {
                 <div className="text-coffee-700 font-medium">{offer.listingTitle}</div>
                 <div className="flex justify-between items-baseline pt-1">
                   <div>
-                    <span className="text-coffee-500 text-[10px] block">Offered Price:</span>
+                    <span className="text-coffee-500 text-[10px] block">
+                      {offer.status === 'countered' && offer.lastActionBy === 'farmer'
+                        ? 'Your Proposed Price:'
+                        : 'Current Proposed Price:'}
+                    </span>
                     <span className="text-xl font-black text-coffee-950">
                       {offer.offeredPricePerKg}{' '}
                       <span className="text-xs font-semibold text-coffee-600">ETB/kg</span>
@@ -521,22 +652,190 @@ export default function FarmerPortalPage() {
                 </div>
               </div>
 
-              {/* Actions */}
-              {offer.status === 'pending' && (
-                <div className="flex items-center gap-2 pt-2 border-t border-coffee-100">
+              {/* Expandable Negotiation Timeline */}
+              {offer.negotiationHistory && offer.negotiationHistory.length > 0 && (
+                <div>
                   <button
-                    onClick={() => handleAcceptOffer(offer._id)}
-                    className="flex-1 py-2 rounded-xl bg-forest-600 hover:bg-forest-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                    type="button"
+                    onClick={() =>
+                      setExpandedHistoryOfferId(
+                        expandedHistoryOfferId === offer._id ? null : offer._id
+                      )
+                    }
+                    className="text-[11px] font-bold text-coffee-700 hover:text-coffee-950 flex items-center gap-1 transition-colors"
                   >
-                    <CheckCircle2 className="w-4 h-4" />
-                    Accept Contract
+                    <History className="w-3.5 h-3.5 text-coffee-500" />
+                    {expandedHistoryOfferId === offer._id
+                      ? 'Hide Negotiation Timeline'
+                      : `View Negotiation Timeline (${offer.negotiationHistory.length} turns)`}
                   </button>
-                  <button
-                    onClick={() => handleRejectOffer(offer._id)}
-                    className="px-4 py-2 rounded-xl border border-red-300 text-red-700 hover:bg-red-50 font-semibold text-xs transition-colors"
-                  >
-                    Decline
-                  </button>
+
+                  {expandedHistoryOfferId === offer._id && (
+                    <div className="mt-2 p-3 rounded-xl bg-coffee-50/70 border border-coffee-200 space-y-2 text-[11px]">
+                      {offer.negotiationHistory.map((step: any, idx: number) => (
+                        <div
+                          key={idx}
+                          className="flex items-start justify-between border-b border-coffee-200/50 pb-1.5 last:border-0 last:pb-0"
+                        >
+                          <div>
+                            <span className="font-bold text-coffee-900">
+                              {step.senderName ||
+                                (step.senderRole === 'farmer' ? 'You (Farmer)' : 'Buyer')}
+                              :
+                            </span>{' '}
+                            <span className="text-coffee-800">
+                              {step.action === 'accepted'
+                                ? 'Accepted offer'
+                                : step.action === 'rejected'
+                                ? 'Declined offer'
+                                : `Proposed ${step.pricePerKg} ETB/kg`}
+                            </span>
+                            {step.message && (
+                              <p className="text-[10px] text-coffee-500 italic mt-0.5">
+                                &ldquo;{step.message}&rdquo;
+                              </p>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-coffee-400 whitespace-nowrap ml-2">
+                            Round {step.round}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Actions & Counter Form */}
+              {(offer.status === 'pending' || offer.status === 'countered') && (
+                <div>
+                  {offer.currentTurn === 'farmer' ? (
+                    <div>
+                      {counteringOfferId === offer._id ? (
+                        <div className="p-3.5 rounded-xl bg-amber-50/90 border border-amber-200 space-y-3 text-xs">
+                          <span className="font-bold text-coffee-950 block">
+                            Propose Counter-Offer (Round {(offer.round || 1) + 1} of 3)
+                          </span>
+                          <p className="text-[11px] text-coffee-600">
+                            Adjust the price back up toward your target (Minimum protection floor:{' '}
+                            {offer.marketPrice} ETB/kg).
+                          </p>
+                          <div className="space-y-2">
+                            <div>
+                              <label className="text-[10px] font-bold text-coffee-700 block mb-0.5">
+                                Your Counter Price (ETB / Kg):
+                              </label>
+                              <input
+                                type="number"
+                                placeholder={`e.g. ${offer.offeredPricePerKg + 50}`}
+                                value={counterPrice}
+                                onChange={(e) => setCounterPrice(e.target.value)}
+                                className="w-full bg-white border border-coffee-300 rounded-lg px-3 py-1.5 text-xs font-bold text-coffee-950 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-coffee-700 block mb-0.5">
+                                Note / Reason for Counter (Optional):
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="e.g. High cupping score lot, can do this fair middle price"
+                                value={counterMessage}
+                                onChange={(e) => setCounterMessage(e.target.value)}
+                                className="w-full bg-white border border-coffee-300 rounded-lg px-3 py-1.5 text-xs text-coffee-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              onClick={() => handleCounterOffer(offer._id)}
+                              disabled={counterSubmitting}
+                              className="flex-1 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-colors"
+                            >
+                              <Send className="w-3.5 h-3.5" />
+                              {counterSubmitting
+                                ? 'Submitting...'
+                                : `Send Counter-Offer (Round ${(offer.round || 1) + 1}/3)`}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setCounteringOfferId(null);
+                                setCounterPrice('');
+                                setCounterMessage('');
+                              }}
+                              className="px-3.5 py-2 rounded-xl border border-coffee-300 text-coffee-700 text-xs font-semibold hover:bg-coffee-100 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2 pt-2 border-t border-coffee-100">
+                          {offer.round >= 3 && (
+                            <div className="p-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-semibold flex items-center gap-1.5">
+                              <AlertCircle className="w-4 h-4 text-amber-700 flex-shrink-0" />
+                              <span>
+                                Final Round (Round 3 of 3 reached): Counter-offers are disabled. You
+                                must Accept or Decline.
+                              </span>
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleAcceptOffer(offer._id)}
+                              className="flex-1 py-2 rounded-xl bg-forest-600 hover:bg-forest-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                              Accept Contract ({offer.offeredPricePerKg} ETB)
+                            </button>
+
+                            {offer.round < 3 ? (
+                              <button
+                                onClick={() => {
+                                  setCounteringOfferId(offer._id);
+                                  setCounterPrice(String(offer.offeredPricePerKg + 50));
+                                }}
+                                className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-coffee-950 font-bold text-xs flex items-center justify-center gap-1 transition-colors shadow-sm"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                Counter-Offer
+                              </button>
+                            ) : (
+                              <button
+                                disabled
+                                className="px-3 py-2 rounded-xl bg-coffee-100 text-coffee-400 font-semibold text-xs cursor-not-allowed border border-coffee-200"
+                                title="Counter limit (3 rounds) reached"
+                              >
+                                Counter Limit (3/3)
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => handleRejectOffer(offer._id)}
+                              className="px-3.5 py-2 rounded-xl border border-red-300 text-red-700 hover:bg-red-50 font-semibold text-xs transition-colors"
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-coffee-50 border border-coffee-200 text-coffee-700 text-xs flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 font-medium">
+                        <Clock className="w-4 h-4 text-coffee-500" />
+                        Your counter-offer ({offer.offeredPricePerKg} ETB/kg) is pending Buyer&apos;s
+                        response.
+                      </span>
+                      <button
+                        onClick={() => handleRejectOffer(offer._id)}
+                        className="text-[11px] text-red-600 hover:underline font-bold"
+                      >
+                        Cancel Deal
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -544,6 +843,12 @@ export default function FarmerPortalPage() {
                 <div className="p-2.5 rounded-xl bg-forest-100 text-forest-900 text-xs font-semibold text-center flex items-center justify-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-forest-700" />
                   Contract Locked! CBE Escrow Payment Initiated.
+                </div>
+              )}
+
+              {offer.status === 'rejected' && (
+                <div className="p-2 rounded-xl bg-red-50 text-red-800 text-[11px] font-semibold text-center">
+                  Negotiation Closed — Offer Declined.
                 </div>
               )}
             </div>
@@ -907,6 +1212,16 @@ export default function FarmerPortalPage() {
           setTimeout(() => setCreateSuccess(false), 5000);
         }}
       />
+
+      {/* Buyer Traceability & Past History Modal */}
+      {traceabilityTargetUser && (
+        <TraceabilityModal
+          userId={traceabilityTargetUser.id}
+          userName={traceabilityTargetUser.name}
+          userRole="buyer"
+          onClose={() => setTraceabilityTargetUser(null)}
+        />
+      )}
     </div>
   );
 }

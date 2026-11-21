@@ -71,20 +71,44 @@ router.post(
         message: validated.message,
         deliveryTerms: validated.deliveryTerms,
         status: 'pending',
+        // Multi-round negotiation initiation (Round 1 of 3)
+        round: 1,
+        maxRounds: 3,
+        currentTurn: 'farmer',
+        currentPricePerKg: validated.offeredPricePerKg,
+        currentQuantityKg: validated.quantityKg,
+        lastActionBy: 'buyer',
+        counterPricePerKg: validated.offeredPricePerKg,
+        counterQuantityKg: validated.quantityKg,
+        counteredBy: 'buyer',
+        negotiationHistory: [
+          {
+            round: 1,
+            senderRole: 'buyer',
+            senderId: req.user!._id,
+            senderName: buyerProfile?.companyName || req.user!.fullName || 'Buyer',
+            action: validated.offeredPricePerKg === listing.askingPricePerKg ? 'initial_offer' : 'counter_offer',
+            pricePerKg: validated.offeredPricePerKg,
+            quantityKg: validated.quantityKg,
+            totalAmountETB: validated.offeredPricePerKg * validated.quantityKg,
+            message: validated.message || '',
+            createdAt: new Date(),
+          },
+        ],
         marketPriceAtOffer: refPrice,
         priceFairnessDiff: fairness.diff,
         fairnessPercentage: fairness.percentageOfMarket,
         fairnessStatus: fairness.status,
       });
 
-      // Notify farmer of new incoming offer
+      // Notify farmer of new incoming offer (Round 1 of 3)
       await createNotification({
         recipient: listing.farmer,
         type: 'new_offer',
-        title: 'New Offer Received!',
-        message: `${buyerProfile?.companyName || 'A verified buyer'} made an offer of ${validated.offeredPricePerKg} ETB/kg for ${validated.quantityKg} kg (${fairness.label}).`,
-        link: `/farmer/offers`,
-        metadata: { offerId: offer._id, listingId: listing._id },
+        title: 'New Offer Received (Round 1 of 3)!',
+        message: `${buyerProfile?.companyName || req.user!.fullName || 'A verified buyer'} made a price proposal of ${validated.offeredPricePerKg} ETB/kg for ${validated.quantityKg} kg (Round 1 of 3: ${fairness.label}).`,
+        link: `/farmer`,
+        metadata: { offerId: offer._id, listingId: listing._id, round: 1 },
       });
 
       res.status(201).json({
@@ -167,8 +191,9 @@ router.post(
         return;
       }
 
-      const lastProposer = offer.status === 'countered' ? offer.counteredBy : 'buyer';
-      if ((isFarmer && lastProposer === 'farmer') || (isBuyer && lastProposer === 'buyer')) {
+      const currentTurn = offer.currentTurn || (offer.status === 'countered' ? (offer.counteredBy === 'farmer' ? 'buyer' : 'farmer') : 'farmer');
+      const userRole = isFarmer ? 'farmer' : 'buyer';
+      if (userRole !== currentTurn) {
         res.status(400).json({ success: false, message: 'You made the latest proposal. Wait for the other side to accept, counter, or reject it.' });
         return;
       }
@@ -187,11 +212,24 @@ router.post(
         return;
       }
 
-      // Check if price is final (if countered, use counter price)
-      const agreedPrice = offer.counterPricePerKg || offer.offeredPricePerKg;
-      const agreedQty = offer.counterQuantityKg || offer.quantityKg;
+      // Check if price is final (if countered/multi-round, use current proposed price)
+      const agreedPrice = offer.currentPricePerKg || offer.counterPricePerKg || offer.offeredPricePerKg;
+      const agreedQty = offer.currentQuantityKg || offer.counterQuantityKg || offer.quantityKg;
 
       offer.status = 'accepted';
+      if (!offer.negotiationHistory) offer.negotiationHistory = [];
+      offer.negotiationHistory.push({
+        round: offer.round || 1,
+        senderRole: isFarmer ? 'farmer' : 'buyer',
+        senderId: req.user!._id,
+        senderName: req.user!.fullName,
+        action: 'accepted',
+        pricePerKg: agreedPrice,
+        quantityKg: agreedQty,
+        totalAmountETB: agreedPrice * agreedQty,
+        message: 'Contract proposal accepted. Deal finalized!',
+        createdAt: new Date(),
+      });
       await offer.save();
 
       // Create official Trade / Deal record
@@ -239,7 +277,7 @@ router.post(
 
 /**
  * POST /api/v1/offers/:id/counter
- * Farmer counters buyer's offer
+ * Counter-offer loop capped at 3 rounds maximum
  */
 router.post(
   '/:id/counter',
@@ -267,6 +305,29 @@ router.post(
         return;
       }
 
+      // Determine who must respond
+      const currentTurn = offer.currentTurn || (offer.status === 'countered' ? (offer.counteredBy === 'farmer' ? 'buyer' : 'farmer') : 'farmer');
+      const userRole = isFarmer ? 'farmer' : 'buyer';
+      if (userRole !== currentTurn) {
+        res.status(400).json({
+          success: false,
+          message: 'It is not your turn to counter. Please wait for the other party to respond.',
+        });
+        return;
+      }
+
+      // STRICT CAP AT 3 NEGOTIATION ROUNDS
+      const currentRound = offer.round || 1;
+      if (currentRound >= 3) {
+        res.status(400).json({
+          success: false,
+          message: 'Maximum negotiation limit reached (3 rounds). Counter-offers are disabled. Your only available actions are to Accept or Reject this deal.',
+          round: currentRound,
+          maxRounds: 3,
+        });
+        return;
+      }
+
       const price = Number(counterPricePerKg);
       if (!Number.isFinite(price) || price <= 0) {
         res.status(400).json({ success: false, message: 'counterPricePerKg must be a positive number' });
@@ -282,25 +343,64 @@ router.post(
         return;
       }
 
+      const nextRound = currentRound + 1;
+      const nextTurn = isFarmer ? 'buyer' : 'farmer';
+
+      offer.round = nextRound;
+      offer.maxRounds = 3;
+      offer.currentTurn = nextTurn;
+      offer.lastActionBy = isFarmer ? 'farmer' : 'buyer';
+      offer.currentPricePerKg = price;
+      if (counterQuantityKg && Number(counterQuantityKg) > 0) {
+        offer.currentQuantityKg = Number(counterQuantityKg);
+      } else if (!offer.currentQuantityKg) {
+        offer.currentQuantityKg = offer.quantityKg;
+      }
       offer.counterPricePerKg = price;
-      if (counterQuantityKg) offer.counterQuantityKg = Number(counterQuantityKg);
+      offer.counterQuantityKg = offer.currentQuantityKg;
       offer.counterMessage = counterMessage || '';
       offer.counteredBy = isFarmer ? 'farmer' : 'buyer';
       offer.counteredAt = new Date();
       offer.status = 'countered';
+
+      if (!offer.negotiationHistory) {
+        offer.negotiationHistory = [];
+      }
+      offer.negotiationHistory.push({
+        round: nextRound,
+        senderRole: isFarmer ? 'farmer' : 'buyer',
+        senderId: req.user!._id,
+        senderName: req.user!.fullName || (isFarmer ? 'Farmer' : 'Buyer'),
+        action: 'counter_offer',
+        pricePerKg: price,
+        quantityKg: offer.currentQuantityKg,
+        totalAmountETB: price * offer.currentQuantityKg,
+        message: counterMessage || '',
+        createdAt: new Date(),
+      });
+
       await offer.save();
 
       const recipientId = isFarmer ? offer.buyer : offer.farmer;
+      const isFinalTurn = nextRound === 3;
+      const roundTag = isFinalTurn ? ' (Final Round 3/3 - Accept or Reject only)' : ` (Round ${nextRound} of 3)`;
+
       await createNotification({
         recipient: recipientId,
         type: 'offer_countered',
-        title: 'Counter-Offer Received',
-        message: `${req.user!.fullName} counter-offered ${counterPricePerKg} ETB/kg: "${counterMessage || ''}"`,
-        link: isFarmer ? '/buyer/offers' : '/farmer/offers',
-        metadata: { offerId: offer._id },
+        title: isFinalTurn ? 'Final Counter-Offer Received (Round 3/3)' : `Counter-Offer Received (Round ${nextRound}/3)`,
+        message: `${req.user!.fullName} counter-offered ${price} ETB/kg${roundTag}: "${counterMessage || ''}"`,
+        link: isFarmer ? '/buyer' : '/farmer',
+        metadata: { offerId: offer._id, round: nextRound, isFinalTurn },
       });
 
-      res.json({ success: true, message: 'Counter-offer sent', offer });
+      res.json({
+        success: true,
+        message: `Counter-offer submitted successfully (${nextRound}/3).`,
+        offer,
+        round: nextRound,
+        isFinalTurn,
+      });
     } catch (err) {
       next(err);
     }
@@ -329,18 +429,37 @@ router.post(
         return;
       }
 
+      const activePrice = offer.currentPricePerKg || offer.counterPricePerKg || offer.offeredPricePerKg;
+      const activeQty = offer.currentQuantityKg || offer.counterQuantityKg || offer.quantityKg;
+
       offer.status = 'rejected';
+      if (!offer.negotiationHistory) {
+        offer.negotiationHistory = [];
+      }
+      offer.negotiationHistory.push({
+        round: offer.round || 1,
+        senderRole: isFarmer ? 'farmer' : 'buyer',
+        senderId: req.user!._id,
+        senderName: req.user!.fullName,
+        action: 'rejected',
+        pricePerKg: activePrice,
+        quantityKg: activeQty,
+        totalAmountETB: activePrice * activeQty,
+        message: 'Offer declined. Deal permanently closed.',
+        createdAt: new Date(),
+      });
       await offer.save();
 
       await createNotification({
         recipient: isFarmer ? offer.buyer : offer.farmer,
         type: 'offer_rejected',
-        title: 'Offer Declined',
-        message: `${isFarmer ? 'The farmer' : 'The buyer'} declined the offer for ${offer.quantityKg} kg.`,
+        title: 'Offer Declined (Deal Closed)',
+        message: `${isFarmer ? 'The farmer' : 'The buyer'} declined the price offer. Deal permanently closed.`,
         link: isFarmer ? '/buyer' : '/farmer',
+        metadata: { offerId: offer._id },
       });
 
-      res.json({ success: true, message: 'Offer rejected', offer });
+      res.json({ success: true, message: 'Offer rejected and deal closed.', offer });
     } catch (err) {
       next(err);
     }

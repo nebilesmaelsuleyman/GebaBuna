@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React from 'react';
 import NextLink from 'next/link';
@@ -20,11 +20,11 @@ import { PublicStats } from '../types';
 // Estimated 2025/26 green-coffee prices, ETB/kg. Reference = server/src/constants/coffeePrices.ts.
 // Broker column assumes roadside collectors pay about 78% of the reference price.
 const ecxRows = [
-  { origin: 'Jimma G4 · Mana', process: 'Natural', broker: '560', ecx: '720', buna: '745', advantage: '+33%' },
-  { origin: 'Jimma G3 · Gomma', process: 'Natural', broker: '650', ecx: '830', buna: '860', advantage: '+32%' },
-  { origin: 'Limu G2 · Seka Chekorsa', process: 'Washed', broker: '820', ecx: '1,040', buna: '1,075', advantage: '+31%' },
-  { origin: 'Jimma G1 · Agaro', process: 'Natural', broker: '850', ecx: '1,080', buna: '1,120', advantage: '+32%' },
-  { origin: 'Limu G1 · Kossa', process: 'Washed', broker: '900', ecx: '1,150', buna: '1,195', advantage: '+33%' },
+  { origin: 'Jimma G4 Â· Mana', process: 'Natural', broker: '560', ecx: '720', buna: '745', advantage: '+33%' },
+  { origin: 'Jimma G3 Â· Gomma', process: 'Natural', broker: '650', ecx: '830', buna: '860', advantage: '+32%' },
+  { origin: 'Limu G2 Â· Seka Chekorsa', process: 'Washed', broker: '820', ecx: '1,040', buna: '1,075', advantage: '+31%' },
+  { origin: 'Jimma G1 Â· Agaro', process: 'Natural', broker: '850', ecx: '1,080', buna: '1,120', advantage: '+32%' },
+  { origin: 'Limu G1 Â· Kossa', process: 'Washed', broker: '900', ecx: '1,150', buna: '1,195', advantage: '+33%' },
 ];
 
 const steps = [
@@ -107,8 +107,8 @@ export default function HomePage() {
             <div className="relative">
               <div className="overflow-hidden rounded-[28px] border border-coffee-200 bg-coffee-950 shadow-[0_30px_80px_rgba(22,13,9,0.22)]">
                 <img
-                  src="https://images.unsplash.com/photo-1447708961282-4f2c4bfb4b1a?auto=format&fit=crop&w=1200&q=80"
-                  alt="Ripe coffee cherries on the branch"
+                  src="/images/hero-harvest.jpg"
+                  alt="Jimma coffee farmers harvesting ripe coffee cherries"
                   className="h-[420px] w-full object-cover sm:h-[480px]"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-coffee-950 via-coffee-950/10 to-transparent" />
@@ -212,13 +212,13 @@ export default function HomePage() {
               </div>
               <h3 className="text-xl font-bold text-coffee-950">Photo grading before the negotiation starts</h3>
               <p className="mt-2 max-w-md text-sm leading-relaxed text-coffee-600">
-                Screen size, defects, color, and moisture become a grade and a price band. The farmer sees the number before accepting anyone’s offer.
+                Screen size, defects, color, and moisture become a grade and a price band. The farmer sees the number before accepting anyoneâ€™s offer.
               </p>
             </div>
             <div className="mt-6 flex items-center justify-between rounded-2xl bg-coffee-950 px-4 py-3 text-cream-50">
               <div>
-                <p className="text-[11px] text-coffee-300">Jimma lot · washed</p>
-                <p className="font-semibold">Grade 2 · screen 16+</p>
+                <p className="text-[11px] text-coffee-300">Jimma lot Â· washed</p>
+                <p className="font-semibold">Grade 2 Â· screen 16+</p>
               </div>
               <p className="text-lg font-extrabold text-gold-300">1,040 ETB/kg</p>
             </div>
@@ -229,7 +229,7 @@ export default function HomePage() {
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gold-400 text-xs font-black text-coffee-950">BF</div>
               <div>
                 <p className="text-sm font-bold">Buna on Telegram</p>
-                <p className="text-[11px] text-coffee-300">Voice agent · Afaan Oromoo & Amharic</p>
+                <p className="text-[11px] text-coffee-300">Voice agent Â· Afaan Oromoo & Amharic</p>
               </div>
             </div>
             <div className="space-y-3 px-5 py-5">
@@ -249,6 +249,8 @@ export default function HomePage() {
                 <Send className="h-3.5 w-3.5" />
                 @bunajimmabot
               </a>
+
+
             </div>
           </article>
         </div>
@@ -317,3 +319,4 @@ export default function HomePage() {
     </div>
   );
 }
+

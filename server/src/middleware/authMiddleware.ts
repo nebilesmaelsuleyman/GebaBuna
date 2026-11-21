@@ -52,6 +52,30 @@ export const authenticateJWT = async (
   }
 };
 
+export const optionalAuthenticateJWT = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    let token: string | undefined;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    }
+    if (token) {
+      const decoded = jwt.verify(token, config.jwtSecret) as { id: string; role: UserRole };
+      const user = await User.findById(decoded.id);
+      if (user && user.isActive) {
+        req.user = user;
+      }
+    }
+    next();
+  } catch {
+    next();
+  }
+};
+
 export const requireRoles = (allowedRoles: UserRole[]) => {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
     if (!req.user) {

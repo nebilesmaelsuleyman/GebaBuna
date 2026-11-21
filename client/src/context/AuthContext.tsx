@@ -4,14 +4,19 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { User, Role } from '../types';
 import { api, SESSION_EXPIRED_EVENT } from '../services/api';
 
+export interface AuthResponseResult {
+  success: boolean;
+  message?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   role: Role | 'guest';
   token: string | null;
   isLoading: boolean;
-  login: (identifier: string, password: string) => Promise<boolean>;
-  otpLogin: (phone: string, code: string) => Promise<boolean>;
-  register: (payload: Record<string, any>) => Promise<boolean>;
+  login: (identifier: string, password: string) => Promise<AuthResponseResult>;
+  otpLogin: (phone: string, code: string, extra?: { role?: string; fullName?: string }) => Promise<AuthResponseResult>;
+  register: (payload: Record<string, any>) => Promise<AuthResponseResult>;
   logout: () => void;
   /** Signs in with a seeded demo account. Throws with a readable message on failure. */
   switchDemoRole: (role: Role | 'guest') => Promise<void>;
@@ -67,42 +72,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('buna_user', JSON.stringify(nextUser));
   };
 
-  const login = async (identifier: string, password: string): Promise<boolean> => {
+  const login = async (identifier: string, password: string): Promise<AuthResponseResult> => {
     try {
       const res = await api.login(identifier, password);
       if (res.success && res.token) {
         applySession(res.token, res.user);
-        return true;
+        return { success: true };
       }
-      return false;
-    } catch {
-      return false;
+      return { success: false, message: 'Invalid credentials. Please verify and try again.' };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Login failed. Please check your credentials.' };
     }
   };
 
-  const otpLogin = async (phone: string, code: string): Promise<boolean> => {
+  const otpLogin = async (
+    phone: string,
+    code: string,
+    extra?: { role?: string; fullName?: string }
+  ): Promise<AuthResponseResult> => {
     try {
-      const res = await api.otpLogin(phone, code);
+      const res = await api.otpLogin(phone, code, extra);
       if (res.success && res.token) {
         applySession(res.token, res.user);
-        return true;
+        return { success: true };
       }
-      return false;
-    } catch {
-      return false;
+      return { success: false, message: 'Verification failed. Please check the SMS code.' };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'OTP verification failed.' };
     }
   };
 
-  const register = async (payload: Record<string, any>): Promise<boolean> => {
+  const register = async (payload: Record<string, any>): Promise<AuthResponseResult> => {
     try {
       const res = await api.register(payload);
       if (res.success && res.token) {
         applySession(res.token, res.user);
-        return true;
+        return { success: true };
       }
-      return false;
-    } catch {
-      return false;
+      return { success: false, message: 'Registration did not complete. Please check the fields.' };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Registration failed. Please check the fields and try again.' };
     }
   };
 

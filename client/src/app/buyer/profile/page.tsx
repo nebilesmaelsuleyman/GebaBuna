@@ -54,11 +54,35 @@ export default function BuyerProfilePage() {
   const change = (key: keyof BuyerForm, value: string) => setForm((current) => ({ ...current, [key]: value }));
   const selectFile = (event: ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0] || null;
-    if (selected && !['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(selected.type)) {
-      setError('Upload a PDF, JPG, PNG, or WebP file.'); setFile(null); return;
+    const allowedMimes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword',
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+    ];
+    const isAllowedExt = selected && (
+      selected.name.toLowerCase().endsWith('.docx') ||
+      selected.name.toLowerCase().endsWith('.doc') ||
+      selected.name.toLowerCase().endsWith('.pdf') ||
+      selected.name.toLowerCase().endsWith('.jpg') ||
+      selected.name.toLowerCase().endsWith('.jpeg') ||
+      selected.name.toLowerCase().endsWith('.png') ||
+      selected.name.toLowerCase().endsWith('.webp')
+    );
+    if (selected && !(allowedMimes.includes(selected.type) || isAllowedExt)) {
+      setError('Upload a PDF, DOCX, JPG, PNG, or WebP file.');
+      setFile(null);
+      return;
     }
-    if (selected && selected.size > 10 * 1024 * 1024) { setError('File size must be 10 MB or less.'); setFile(null); return; }
-    setError(''); setFile(selected);
+    if (selected && selected.size > 10 * 1024 * 1024) {
+      setError('File size must be 10 MB or less.');
+      setFile(null);
+      return;
+    }
+    setError('');
+    setFile(selected);
     if (selected && !docTitle) setDocTitle(selected.name.replace(/\.[^.]+$/, ''));
   };
   const save = async (event: FormEvent) => {
@@ -124,10 +148,10 @@ export default function BuyerProfilePage() {
         </form>
         <aside className="space-y-6">
           <form onSubmit={upload} className="rounded-3xl border border-coffee-200 bg-white p-5 shadow-sm sm:p-6">
-            <h2 className="text-lg font-extrabold text-coffee-950">Legal documents</h2><p className="mb-4 mt-1 text-xs leading-5 text-coffee-600">PDF or image, up to 10 MB each. Upload readable, current documents; admins can review them with your application.</p>
+            <h2 className="text-lg font-extrabold text-coffee-950">Legal documents</h2><p className="mb-4 mt-1 text-xs leading-5 text-coffee-600">PDF, DOCX, or image, up to 10 MB each. Upload readable, current documents; admins can review them with your application.</p>
             <label className="text-xs font-bold text-coffee-800">Document type<select className={inputClass} value={docType} onChange={(e) => setDocType(e.target.value)}>{Object.entries(docNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
             <label className="mt-3 block text-xs font-bold text-coffee-800">Document title<input className={inputClass} value={docTitle} onChange={(e) => setDocTitle(e.target.value)} placeholder="e.g. 2026 Trade License" /></label>
-            <label className="mt-3 flex cursor-pointer flex-col items-center rounded-2xl border-2 border-dashed border-coffee-200 bg-coffee-50 px-4 py-6 text-center hover:border-forest-500"><Upload className="mb-2 h-6 w-6 text-forest-700" /><span className="text-sm font-bold text-coffee-900">{file?.name || 'Choose a file to upload'}</span><span className="mt-1 text-[11px] text-coffee-500">PDF, JPG, PNG, WebP · 10 MB max</span><input type="file" accept=".pdf,image/jpeg,image/png,image/webp" className="sr-only" onChange={selectFile} /></label>
+            <label className="mt-3 flex cursor-pointer flex-col items-center rounded-2xl border-2 border-dashed border-coffee-200 bg-coffee-50 px-4 py-6 text-center hover:border-forest-500"><Upload className="mb-2 h-6 w-6 text-forest-700" /><span className="text-sm font-bold text-coffee-900">{file?.name || 'Choose a file to upload'}</span><span className="mt-1 text-[11px] text-coffee-500">PDF, DOCX, JPG, PNG, WebP · 10 MB max</span><input type="file" accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,image/jpeg,image/png,image/webp" className="sr-only" onChange={selectFile} /></label>
             <button disabled={uploading || !file} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-cherry-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Upload for review</button>
           </form>
           <section className="rounded-3xl border border-coffee-200 bg-white p-5 shadow-sm sm:p-6"><h2 className="text-lg font-extrabold text-coffee-950">Submitted documents <span className="ml-1 rounded-full bg-coffee-100 px-2 py-0.5 text-xs">{documents.length}</span></h2>

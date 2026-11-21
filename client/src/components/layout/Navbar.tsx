@@ -13,7 +13,6 @@ import {
   User,
   ShieldCheck,
   LogOut,
-  Send,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -81,16 +80,6 @@ export const Navbar: React.FC = () => {
                 </button>
               ))}
             </div>
-
-            <a
-              href="https://t.me/bunajimmabot"
-              target="_blank"
-              rel="noreferrer"
-              className="hidden items-center gap-2 rounded-full bg-cherry-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-cherry-500 lg:inline-flex"
-            >
-              <Send className="h-3.5 w-3.5" />
-              Open Telegram Bot
-            </a>
 
             {user ? (
               <div className="flex items-center gap-2 border-l border-coffee-200 pl-2">
