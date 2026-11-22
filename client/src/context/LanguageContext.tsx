@@ -14,9 +14,9 @@ interface Translations {
 export const translations: Translations = {
   // Brand
   appName: {
-    om: 'Buna Gatii Qajeelaa',
-    am: 'ቡና ትክክለኛ ዋጋ',
-    en: 'Buna Fair Price',
+    om: 'GebaBuna',
+    am: 'ገባ ቡና',
+    en: 'GebaBuna',
   },
   tagline: {
     om: 'Qotee bultoota buna Jimmaa gatii madaalawaa fi gabaa qulqulluun cimsuu',
@@ -39,9 +39,9 @@ export const translations: Translations = {
 
   // Hero Section
   heroTitle: {
-    om: 'Buna Keessaniif Gatii Qajeelaa Argadhaa',
-    am: 'ለቡናዎ ትክክለኛና ፍትሃዊ ዋጋ ያግኙ',
-    en: 'Get Real Fair Value for Your Coffee Harvest',
+    om: 'Qotee bultoota bunaa gatii gabaa haqa qabeessa ta’etti hidhuu.',
+    am: 'የቡና አምራቾችን ከፍትሃዊ የገበያ ዋጋዎች ጋር ማገናኘት።',
+    en: 'Connecting coffee farmers to fair market prices.',
   },
   heroSubtitle: {
     om: 'Gatii gabaa ECX guyyaa guyyaa Jimmaa hordofaa, daldaltoota mirkanaa’an waliin daldalaa, bu’aa keessan dabalaa.',

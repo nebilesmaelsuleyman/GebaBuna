@@ -24,7 +24,6 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import Link from 'next/link';
-import VoiceInputButton from '../../components/common/VoiceInputButton';
 import TraceabilityModal from '../../components/common/TraceabilityModal';
 
 export default function MarketplacePage() {
@@ -49,9 +48,13 @@ export default function MarketplacePage() {
   const [offerSubmitting, setOfferSubmitting] = useState<boolean>(false);
   const [traceabilityTargetUser, setTraceabilityTargetUser] = useState<{ id: string; name: string } | null>(null);
 
+  // Debounced search & filter sync
   useEffect(() => {
-    loadListings();
-  }, [selectedWoreda, selectedGrade, selectedProcessing]);
+    const timer = setTimeout(() => {
+      loadListings();
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [search, selectedWoreda, selectedGrade, selectedProcessing]);
 
   useEffect(() => {
     if (role === 'buyer') {
@@ -67,6 +70,33 @@ export default function MarketplacePage() {
     }
   }, [role]);
 
+  // Instant reactive filter on keystroke across farmer name, position, woreda, kebele & variety
+  const filteredListings = listings.filter((lot) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase().trim();
+    const farmerName = (lot.farmer?.fullName || '').toLowerCase();
+    const woreda = (lot.location?.woreda || '').toLowerCase();
+    const kebele = (lot.location?.kebele || '').toLowerCase();
+    const region = (lot.location?.region || '').toLowerCase();
+    const zone = (lot.location?.zone || '').toLowerCase();
+    const title = (lot.title || '').toLowerCase();
+    const variety = (lot.variety || '').toLowerCase();
+    const processing = (lot.processing || '').toLowerCase();
+    const grade = (lot.grade || '').toLowerCase();
+
+    return (
+      farmerName.includes(q) ||
+      woreda.includes(q) ||
+      kebele.includes(q) ||
+      region.includes(q) ||
+      zone.includes(q) ||
+      title.includes(q) ||
+      variety.includes(q) ||
+      processing.includes(q) ||
+      grade.includes(q)
+    );
+  });
+
   async function loadListings() {
     setLoading(true);
     try {
@@ -74,7 +104,7 @@ export default function MarketplacePage() {
       if (selectedWoreda !== 'all') params.woreda = selectedWoreda;
       if (selectedGrade !== 'all') params.grade = selectedGrade;
       if (selectedProcessing !== 'all') params.processing = selectedProcessing;
-      if (search) params.search = search;
+      if (search.trim()) params.search = search.trim();
 
       const res = await api.getListings(params);
       if (res.success && res.data) {
@@ -179,24 +209,26 @@ export default function MarketplacePage() {
       {/* Filter and Search Bar */}
       <div className="bg-white rounded-2xl border border-coffee-200 p-4 shadow-sm space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Search Box */}
+          {/* Search Box by Farmer or Position */}
           <div className="relative">
             <Search className="w-4 h-4 text-coffee-400 absolute left-3.5 top-3" />
             <input
               type="text"
-              placeholder="Search farmer or variety..."
+              placeholder="Search by farmer name or position (e.g. Mana, Lemma, Kenteri)..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && loadListings()}
-              className="w-full bg-coffee-50/50 border border-coffee-200 rounded-xl pl-9 pr-24 py-2 text-xs text-coffee-950 focus:outline-none focus:ring-2 focus:ring-gold-500"
+              className="w-full bg-coffee-50/50 border border-coffee-200 rounded-xl pl-9 pr-8 py-2 text-xs text-coffee-950 focus:outline-none focus:ring-2 focus:ring-gold-500 placeholder:text-coffee-400 font-medium"
             />
-            <div className="absolute right-2 top-1/2 -translate-y-1/2">
-              <VoiceInputButton
-                label="Speak"
-                className="px-2.5 py-1.5 text-[11px]"
-                onTranscript={(text) => setSearch(text)}
-              />
-            </div>
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-coffee-400 hover:text-coffee-700 p-0.5 rounded-full hover:bg-coffee-100 transition-colors"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {/* Woreda Filter */}
@@ -245,6 +277,23 @@ export default function MarketplacePage() {
             </select>
           </div>
         </div>
+
+        {/* Live Filter Indicator */}
+        {search.trim() && (
+          <div className="flex items-center justify-between text-xs text-coffee-600 bg-coffee-50 px-3 py-1.5 rounded-xl border border-coffee-200 animate-in fade-in">
+            <span>
+              Searching for: <strong className="text-coffee-950">&ldquo;{search}&rdquo;</strong> (Farmer / Position) &middot;{' '}
+              <strong className="text-forest-700">{filteredListings.length}</strong> {filteredListings.length === 1 ? 'lot' : 'lots'} found
+            </span>
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="text-[11px] font-bold text-cherry-700 hover:text-cherry-900 underline"
+            >
+              Clear search
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Listings Grid */}
@@ -253,9 +302,13 @@ export default function MarketplacePage() {
           <Coffee className="w-8 h-8 animate-bounce mx-auto text-gold-500 mb-2" />
           Loading certified coffee lots...
         </div>
-      ) : listings.length === 0 ? (
+      ) : filteredListings.length === 0 ? (
         <div className="p-12 text-center bg-white rounded-2xl border border-coffee-200 space-y-2">
-          <p className="font-bold text-coffee-900">No coffee lots match your selected filters.</p>
+          <p className="font-bold text-coffee-900">
+            {search.trim()
+              ? `No coffee lots found matching farmer or position "${search}".`
+              : 'No coffee lots match your selected filters.'}
+          </p>
           <button
             onClick={() => {
               setSelectedWoreda('all');
@@ -270,7 +323,7 @@ export default function MarketplacePage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {listings.map((lot) => (
+          {filteredListings.map((lot) => (
             <div
               key={lot._id}
               className="bg-white rounded-2xl border border-coffee-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between overflow-hidden group"

@@ -481,7 +481,7 @@ export default function LoginPage() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <p className="text-xs text-emerald-900 leading-relaxed">
-                    <span className="font-bold">Buna Fair Price (ቡና ዋጋ):</span> Your one-time verification code is{' '}
+                    <span className="font-bold">GebaBuna (ገባ ቡና):</span> Your one-time verification code is{' '}
                     <span className="font-mono text-base font-black text-emerald-950 bg-white px-2.5 py-0.5 rounded border border-emerald-300 tracking-widest shadow-sm">
                       {DEMO_OTP}
                     </span>

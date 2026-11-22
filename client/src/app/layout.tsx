@@ -11,9 +11,9 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const plusJakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-jakarta' });
 
 export const metadata: Metadata = {
-  title: 'Buna Fair Price (ቡና ዋጋ) — Jimma Coffee Transparency & Exchange',
+  title: 'GebaBuna (ገባ ቡና) — Jimma Coffee Transparency & Exchange',
   description:
-    'Empowering Ethiopian coffee smallholders with transparent reference prices, verified fair buyer badges, and direct marketplace access in Afaan Oromoo, Amharic, and English.',
+    'GebaBuna empowers Ethiopian coffee smallholders with transparent reference prices, verified fair buyer badges, and direct marketplace access in Afaan Oromoo, Amharic, and English.',
 };
 
 export default function RootLayout({

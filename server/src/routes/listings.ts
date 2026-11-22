@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { authenticateJWT, AuthenticatedRequest, requireRoles } from '../middleware/authMiddleware';
 import { Listing, IListing } from '../models/Listing';
+import { User } from '../models/User';
 import { FarmerProfile } from '../models/FarmerProfile';
 import { getMarketReferencePrice, evaluatePriceFairness } from '../services/marketPriceService';
 import { upload, getFileUrl } from '../middleware/uploadMiddleware';
@@ -61,11 +62,19 @@ router.get('/', async (req: Request, res: Response, next: NextFunction): Promise
 
     if (search) {
       const s = String(search).trim();
+      const matchingUsers = await User.find({
+        fullName: { $regex: s, $options: 'i' },
+      }).select('_id');
+      const matchingUserIds = matchingUsers.map((u) => u._id);
+
       query.$or = [
+        { farmer: { $in: matchingUserIds } },
+        { title: { $regex: s, $options: 'i' } },
         { coffeeType: { $regex: s, $options: 'i' } },
         { description: { $regex: s, $options: 'i' } },
         { 'location.woreda': { $regex: s, $options: 'i' } },
         { 'location.kebele': { $regex: s, $options: 'i' } },
+        { 'location.region': { $regex: s, $options: 'i' } },
       ];
     }
 

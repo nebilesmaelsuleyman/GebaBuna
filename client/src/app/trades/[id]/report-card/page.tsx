@@ -555,7 +555,7 @@ export default function TradeReportCardPage() {
             <p className="font-bold text-coffee-900">{tr.officialRecord}</p>
             <p className="text-coffee-600">Buusuun Kaffaltii Jimma Zone Agri Bureau | የጅማ ዞን የሚስተር ቢሮ የተሟላ</p>
             <p className="text-[10px] text-coffee-400 uppercase tracking-wider">
-              Buna Fair Price (ቡና ዋጋ) Platform | Trade ID: {trade._id} | Generated: {new Date().toLocaleDateString()}
+              GebaBuna (ገባ ቡና) Platform | Trade ID: {trade._id} | Generated: {new Date().toLocaleDateString()}
             </p>
           </div>
         </div>

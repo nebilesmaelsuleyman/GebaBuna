@@ -16,7 +16,7 @@ import { recalculateAllFarmerScores, refreshBuyerRanks } from './services/scorin
 import { REFERENCE_PRICES, PRICE_SOURCE_NOTE, buildHistory } from './constants/coffeePrices';
 
 async function seed() {
-  console.log('🌱 [Seed] Starting Buna Fair Price database seed...');
+  console.log('🌱 [Seed] Starting GebaBuna database seed...');
   await connectDB();
 
   // Clear existing collections
@@ -973,7 +973,7 @@ async function seed() {
   await refreshBuyerRanks();
 
   console.log('\n============================================================');
-  console.log('✅ BUNA FAIR PRICE - DEMO DATABASE SEEDED SUCCESSFULLY');
+  console.log('✅ GEBABUNA - DEMO DATABASE SEEDED SUCCESSFULLY');
   console.log('============================================================');
   console.log('👑 ADMIN CREDENTIALS (Agriculture Bureau):');
   console.log('   Email:    admin@jimma-agri.gov.et');

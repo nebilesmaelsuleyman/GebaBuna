@@ -43,7 +43,7 @@ app.use('/uploads', express.static(config.uploadDir));
 app.get('/api/v1/health', (_req, res) => {
   res.json({
     success: true,
-    platform: 'Buna Fair Price (ቡና ዋጋ)',
+    platform: 'GebaBuna (ገባ ቡና)',
     status: 'operational',
     region: 'Jimma, Ethiopia',
     timestamp: new Date().toISOString(),
@@ -69,7 +69,7 @@ app.use('/api/v1/stats', statsRoutes);
 // Root greeting
 app.get('/', (_req, res) => {
   res.json({
-    message: 'Welcome to Buna Fair Price API ☕',
+    message: 'Welcome to GebaBuna API ☕',
     description: 'Empowering Ethiopian coffee farmers with price transparency and verified buyer access.',
     docs: '/api/v1/health',
   });
@@ -83,7 +83,7 @@ const startServer = async () => {
   try {
     await connectDB();
     app.listen(config.port, () => {
-      console.log(`☕ [Buna Fair Price Server] Running on http://localhost:${config.port}`);
+      console.log(`☕ [GebaBuna Server] Running on http://localhost:${config.port}`);
       console.log(`📡 [API Base]: http://localhost:${config.port}/api/v1`);
       
       // Start BunaJimma Telegram Bot

@@ -7,8 +7,7 @@ import {
   CheckCircle2,
   Leaf,
   MapPin,
-  Mic,
-  Send,
+  Play,
   ShieldCheck,
   ShoppingBag,
   Sparkles,
@@ -62,10 +61,10 @@ export default function HomePage() {
               Jimma · Limu · Agaro · Gomma
             </p>
             <h1 className="mt-5 max-w-xl text-4xl font-extrabold leading-[1.05] tracking-tight text-coffee-950 sm:text-5xl lg:text-[3.4rem]">
-              The price on the farm should match the price on the exchange.
+              Connecting coffee farmers to fair market prices.
             </h1>
             <p className="mt-5 max-w-lg text-base leading-relaxed text-coffee-700 sm:text-lg">
-              Buna Fair Price shows smallholders a fair price and floor for their grade, grades their coffee from a photo, and lets them list a lot by voice — in Afaan Oromoo, Amharic, or English.
+              GebaBuna shows smallholders a fair price and floor for their grade, grades their coffee from a photo, and lets them list a lot by voice — in Afaan Oromoo, Amharic, or English.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <NextLink
@@ -224,33 +223,24 @@ export default function HomePage() {
             </div>
           </article>
 
-          <article className="overflow-hidden rounded-[24px] border border-coffee-800 bg-coffee-950 text-cream-50 lg:col-span-5">
+          <article className="overflow-hidden rounded-[24px] border border-coffee-800 bg-coffee-950 text-cream-50 lg:col-span-5 flex flex-col justify-between shadow-xl">
             <div className="flex items-center gap-3 border-b border-white/10 px-5 py-4">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gold-400 text-xs font-black text-coffee-950">BF</div>
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-cherry-600 text-white shadow-sm">
+                <Play className="h-4 w-4 fill-white translate-x-0.5" />
+              </div>
               <div>
-                <p className="text-sm font-bold">Buna on Telegram</p>
-                <p className="text-[11px] text-coffee-300">Voice agent Â· Afaan Oromoo & Amharic</p>
+                <p className="text-sm font-bold text-cream-50">How Farmers Use GebaBuna</p>
+                <p className="text-[11px] text-coffee-300">Watch the direct trade and grading walkthrough</p>
               </div>
             </div>
-            <div className="space-y-3 px-5 py-5">
-              <div className="ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-gold-400 px-3 py-2 text-xs font-medium text-coffee-950">
-                Gatiin buna Natural G2 meeqa?
-              </div>
-              <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-white/8 px-3 py-3 text-xs leading-relaxed text-cream-100">
-                <p className="font-semibold text-forest-300">Natural G2 · 895–1,040 ETB/kg</p>
-                <p className="mt-1 text-coffee-300">Qarshii 895 gadi hin gurguratinaa. 🔊 Voice reply sent.</p>
-              </div>
-              <a
-                href="https://t.me/bunajimmabot"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 text-xs font-bold text-gold-300"
-              >
-                <Send className="h-3.5 w-3.5" />
-                @bunajimmabot
-              </a>
-
-
+            <div className="relative aspect-video w-full flex-1 min-h-[240px] bg-black">
+              <iframe
+                src="https://www.youtube-nocookie.com/embed/UJNDsh-ksbk?rel=0&modestbranding=1"
+                title="How Farmers Use GebaBuna Platform"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                className="absolute inset-0 h-full w-full border-0"
+              />
             </div>
           </article>
         </div>

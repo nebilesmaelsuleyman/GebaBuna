@@ -1,7 +1,7 @@
 {
-  "name": "buna-fair-price-fullstack",
+  "name": "geba-buna",
   "version": "1.0.0",
-  "description": "Fullstack Buna Fair Price Platform (ቡና ዋጋ) — Jimma Coffee Market Transparency",
+  "description": "GebaBuna (ገባ ቡና) — Jimma Coffee Market Transparency & Direct Trade Platform",
   "scripts": {
     "server": "cd server && npm run dev",
     "client": "cd client && npm run dev",

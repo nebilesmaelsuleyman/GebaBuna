@@ -28,7 +28,7 @@ export const Footer: React.FC = () => {
                 <Coffee className="h-4 w-4 text-white" />
               </div>
               <span className="text-base font-extrabold tracking-tight text-cream-50">
-                Buna Fair Price
+                GebaBuna
               </span>
             </div>
             <p className="text-sm leading-relaxed text-coffee-300">
@@ -89,7 +89,7 @@ export const Footer: React.FC = () => {
         </div>
 
         <div className="flex flex-col items-center justify-between gap-3 border-t border-white/10 pt-5 text-[11px] text-coffee-400 sm:flex-row">
-          <span>© {new Date().getFullYear()} Buna Fair Price (የቡና ትክክለኛ ዋጋ). Addis Ababa, Ethiopia.</span>
+          <span>© {new Date().getFullYear()} GebaBuna (ገባ ቡና). Addis Ababa, Ethiopia.</span>
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1 text-forest-300">
               <TrendingUp className="h-3 w-3" /> Direct farm transparency

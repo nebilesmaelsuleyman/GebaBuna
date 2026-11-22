@@ -1,5 +1,5 @@
 /**
- * ☕ BUNA FAIR PRICE - SCORING ENGINE
+ * ☕ GEBABUNA - SCORING ENGINE
  * -------------------------------------------------------------
  * Transparent, weighted scoring algorithms for Ethiopian coffee farmers and buyers.
  * Designed for the Cursor Hackathon (Jimma University).

@@ -1,7 +1,7 @@
 {
-  "name": "buna-fair-price-server",
+  "name": "geba-buna-server",
   "version": "1.0.0",
-  "description": "Backend API for Buna Fair Price platform",
+  "description": "Backend API for GebaBuna platform",
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --poll --respawn --transpile-only src/index.ts",

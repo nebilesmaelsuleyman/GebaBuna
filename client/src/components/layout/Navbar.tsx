@@ -52,7 +52,7 @@ export const Navbar: React.FC = () => {
             </div>
             <div className="flex flex-col">
               <span className="text-[15px] font-extrabold leading-none tracking-tight text-coffee-950">
-                Buna Fair Price
+                GebaBuna
               </span>
               <span className="mt-1 text-[10px] font-medium leading-none tracking-wide text-coffee-500">
                 {language === 'om'
