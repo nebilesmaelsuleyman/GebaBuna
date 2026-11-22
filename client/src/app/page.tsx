@@ -19,11 +19,11 @@ import { PublicStats } from '../types';
 // Estimated 2025/26 green-coffee prices, ETB/kg. Reference = server/src/constants/coffeePrices.ts.
 // Broker column assumes roadside collectors pay about 78% of the reference price.
 const ecxRows = [
-  { origin: 'Jimma G4 Â· Mana', process: 'Natural', broker: '560', ecx: '720', buna: '745', advantage: '+33%' },
-  { origin: 'Jimma G3 Â· Gomma', process: 'Natural', broker: '650', ecx: '830', buna: '860', advantage: '+32%' },
-  { origin: 'Limu G2 Â· Seka Chekorsa', process: 'Washed', broker: '820', ecx: '1,040', buna: '1,075', advantage: '+31%' },
-  { origin: 'Jimma G1 Â· Agaro', process: 'Natural', broker: '850', ecx: '1,080', buna: '1,120', advantage: '+32%' },
-  { origin: 'Limu G1 Â· Kossa', process: 'Washed', broker: '900', ecx: '1,150', buna: '1,195', advantage: '+33%' },
+  { origin: 'Jimma G4 · Mana', process: 'Natural', broker: '560', ecx: '720', buna: '745', advantage: '+33%' },
+  { origin: 'Jimma G3 · Gomma', process: 'Natural', broker: '650', ecx: '830', buna: '860', advantage: '+32%' },
+  { origin: 'Limu G2 · Seka Chekorsa', process: 'Washed', broker: '820', ecx: '1,040', buna: '1,075', advantage: '+31%' },
+  { origin: 'Jimma G1 · Agaro', process: 'Natural', broker: '850', ecx: '1,080', buna: '1,120', advantage: '+32%' },
+  { origin: 'Limu G1 · Kossa', process: 'Washed', broker: '900', ecx: '1,150', buna: '1,195', advantage: '+33%' },
 ];
 
 const steps = [
@@ -211,13 +211,13 @@ export default function HomePage() {
               </div>
               <h3 className="text-xl font-bold text-coffee-950">Photo grading before the negotiation starts</h3>
               <p className="mt-2 max-w-md text-sm leading-relaxed text-coffee-600">
-                Screen size, defects, color, and moisture become a grade and a price band. The farmer sees the number before accepting anyoneâ€™s offer.
+                Screen size, defects, color, and moisture become a grade and a price band. The farmer sees the number before accepting anyone's offer.
               </p>
             </div>
             <div className="mt-6 flex items-center justify-between rounded-2xl bg-coffee-950 px-4 py-3 text-cream-50">
               <div>
-                <p className="text-[11px] text-coffee-300">Jimma lot Â· washed</p>
-                <p className="font-semibold">Grade 2 Â· screen 16+</p>
+                <p className="text-[11px] text-coffee-300">Jimma lot · washed</p>
+                <p className="font-semibold">Grade 2 · screen 16+</p>
               </div>
               <p className="text-lg font-extrabold text-gold-300">1,040 ETB/kg</p>
             </div>
@@ -282,28 +282,6 @@ export default function HomePage() {
               Browse open harvests <ArrowRight className="h-4 w-4" />
             </NextLink>
           </article>
-        </div>
-      </section>
-
-      <section className="px-4 py-16 md:px-8">
-        <div className="mx-auto flex max-w-[1200px] flex-col items-start justify-between gap-6 overflow-hidden rounded-[28px] bg-coffee-950 px-6 py-10 text-cream-50 sm:px-10 md:flex-row md:items-center">
-          <div className="max-w-xl">
-            <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-gold-300">
-              <Mic className="h-3.5 w-3.5" />
-              Demo the web desk today
-            </p>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight">Sign in as Gemechu and sell a lot by voice.</h2>
-            <p className="mt-2 text-sm leading-relaxed text-coffee-300">
-              Or send a voice note to @bunajimmabot on Telegram and hear the fair price back in Afaan Oromoo or Amharic.
-            </p>
-          </div>
-          <NextLink
-            href="/login"
-            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-cream-50 px-6 py-3.5 text-sm font-bold text-coffee-950"
-          >
-            Start the demo
-            <ArrowRight className="h-4 w-4" />
-          </NextLink>
         </div>
       </section>
     </div>

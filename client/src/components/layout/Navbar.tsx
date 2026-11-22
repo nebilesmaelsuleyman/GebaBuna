@@ -20,6 +20,23 @@ export const Navbar: React.FC = () => {
   const { language, setLanguage, t } = useLanguage();
   const pathname = usePathname();
 
+  // First letter of first name and last name
+  const getUserInitials = (name?: string) => {
+    if (!name) return 'U';
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  const profileHref =
+    role === 'farmer'
+      ? '/farmer/profile'
+      : role === 'buyer'
+      ? '/buyer/profile'
+      : role === 'admin'
+      ? '/admin'
+      : '/';
+
   const navLinks = [
     { href: '/', label: t('navHome'), icon: Coffee },
     { href: '/market', label: t('navMarketPrices'), icon: TrendingUp },
@@ -82,18 +99,35 @@ export const Navbar: React.FC = () => {
             </div>
 
             {user ? (
-              <div className="flex items-center gap-2 border-l border-coffee-200 pl-2">
-                <div className="hidden text-right lg:block">
-                  <div className="max-w-[120px] truncate text-xs font-semibold text-coffee-950">
-                    {user.fullName}
+              <div className="flex items-center gap-2.5 border-l border-coffee-200 pl-2.5">
+                <NextLink
+                  href={profileHref}
+                  title={`${user.fullName} (${user.role})`}
+                  className="group flex flex-col items-center justify-center transition-transform hover:scale-105"
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full border border-coffee-300 bg-coffee-950 text-gold-300 font-extrabold text-[11px] shadow-xs overflow-hidden select-none">
+                    {user.avatar ? (
+                      <img
+                        src={user.avatar}
+                        alt={user.fullName}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span>{getUserInitials(user.fullName)}</span>
+                    )}
                   </div>
-                  <div className="text-[10px] font-bold uppercase tracking-wide text-cherry-700">
+                  <span
+                    className={`mt-0.5 rounded-full border px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider leading-none shadow-2xs ${
+                      user.role === 'farmer'
+                        ? 'border-forest-200 bg-forest-50 text-forest-700'
+                        : user.role === 'buyer'
+                        ? 'border-gold-200 bg-gold-50 text-gold-800'
+                        : 'border-cherry-200 bg-cherry-50 text-cherry-700'
+                    }`}
+                  >
                     {user.role}
-                  </div>
-                </div>
-                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-coffee-200 bg-white">
-                  <User className="h-4 w-4 text-coffee-700" />
-                </div>
+                  </span>
+                </NextLink>
                 <button
                   onClick={logout}
                   title="Sign Out"
