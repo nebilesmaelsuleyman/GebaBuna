@@ -22,6 +22,7 @@ import voiceRoutes from './routes/voice';
 import aiAnalysisRoutes from './routes/aiAnalysis';
 import statsRoutes from './routes/stats';
 import { TelegramBotService } from './services/telegramBotService';
+import { redisService } from './services/redisService';
 
 const app = express();
 
@@ -39,14 +40,30 @@ app.use(morgan('dev'));
 // Static uploads directory (for hackathon demo file uploads)
 app.use('/uploads', express.static(config.uploadDir));
 
-// Health check
-app.get('/api/v1/health', (_req, res) => {
+// Health check with Redis cache observability
+app.get('/api/v1/health', async (_req, res) => {
+  const cacheStatus = await redisService.getStatus();
   res.json({
     success: true,
     platform: 'GebaBuna (ገባ ቡና)',
     status: 'operational',
     region: 'Jimma, Ethiopia',
+    cache: {
+      provider: cacheStatus.provider,
+      connected: cacheStatus.connected,
+      hitRatio: cacheStatus.stats.hitRatio,
+      keysCached: cacheStatus.keysCount,
+    },
     timestamp: new Date().toISOString(),
+  });
+});
+
+// Detailed Cache telemetry endpoint
+app.get('/api/v1/health/cache', async (_req, res) => {
+  const cacheStatus = await redisService.getStatus();
+  res.json({
+    success: true,
+    cache: cacheStatus,
   });
 });
 
