@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config(); // fallback to current dir .env
@@ -27,4 +28,10 @@ export const config = {
   // Photo grading: geminiModel gets this long across all keys, then the lighter fallback model is tried
   geminiPrimaryMs: Number(process.env.GEMINI_PRIMARY_MS) || 20000,
   geminiFallbackModel: process.env.GEMINI_FALLBACK_MODEL ?? 'gemini-flash-lite-latest',
+  // Cache settings (supports Redis TCP URL or Unix domain socket for IPC)
+  redisUrl:
+    process.env.REDIS_URL ||
+    (fs.existsSync('/tmp/redis.sock') ? '/tmp/redis.sock' : 'redis://127.0.0.1:6379'),
+  redisEnabled: process.env.REDIS_ENABLED !== 'false',
+  redisTtlDefault: parseInt(process.env.REDIS_TTL_DEFAULT || '300', 10), // 5 minutes default
 };
