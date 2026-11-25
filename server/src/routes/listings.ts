@@ -6,14 +6,18 @@ import { User } from '../models/User';
 import { FarmerProfile } from '../models/FarmerProfile';
 import { getMarketReferencePrice, evaluatePriceFairness } from '../services/marketPriceService';
 import { upload, getFileUrl } from '../middleware/uploadMiddleware';
+import { cacheMiddleware, invalidateCache } from '../middleware/cacheMiddleware';
 
 const router = Router();
 
 /**
  * GET /api/v1/listings
- * Marketplace search & filters for buyers
+ * Marketplace search & filters for buyers (cached in Redis)
  */
-router.get('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.get(
+  '/',
+  cacheMiddleware({ prefix: 'listings', ttlSeconds: 60 }),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const {
       grade,
@@ -128,8 +132,12 @@ router.get('/my', authenticateJWT, async (req: AuthenticatedRequest, res: Respon
 
 /**
  * GET /api/v1/listings/:id
+ * Individual listing detail (cached in Redis)
  */
-router.get('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.get(
+  '/:id',
+  cacheMiddleware({ prefix: 'listing_detail', ttlSeconds: 60 }),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const listing = await Listing.findById(req.params.id)
       .populate('farmer', 'fullName phone email avatar preferredLanguage')
@@ -230,6 +238,8 @@ router.post(
         priceFairnessStatus: fairness.status,
       });
 
+      await invalidateCache(['listings:*', 'stats:*']);
+
       res.status(201).json({
         success: true,
         message: 'Coffee listing published successfully',
@@ -296,6 +306,7 @@ router.put('/:id', authenticateJWT, async (req: AuthenticatedRequest, res: Respo
     }
 
     const updated = await Listing.findByIdAndUpdate(req.params.id, { $set: allowed }, { new: true, runValidators: true });
+    await invalidateCache(['listings:*', 'listing_detail:*', 'stats:*']);
     res.json({ success: true, listing: updated });
   } catch (err) {
     next(err);
@@ -319,6 +330,8 @@ router.delete('/:id', authenticateJWT, async (req: AuthenticatedRequest, res: Re
 
     listing.status = 'cancelled';
     await listing.save();
+
+    await invalidateCache(['listings:*', 'listing_detail:*', 'stats:*']);
 
     res.json({ success: true, message: 'Listing cancelled' });
   } catch (err) {
@@ -344,6 +357,7 @@ router.post('/:id/ai-grade', async (req: Request, res: Response, next: NextFunct
       },
       { new: true }
     );
+    await invalidateCache(['listings:*', 'listing_detail:*']);
     res.json({ success: true, message: 'AI bean grade registered', listing });
   } catch (err) {
     next(err);

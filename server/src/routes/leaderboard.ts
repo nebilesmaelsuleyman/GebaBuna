@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { FarmerProfile } from '../models/FarmerProfile';
 import { BuyerProfile } from '../models/BuyerProfile';
 import { FARMER_RANKING_WEIGHTS } from '../services/scoringService';
+import { cacheMiddleware } from '../middleware/cacheMiddleware';
 
 const router = Router();
 
@@ -9,21 +10,28 @@ const router = Router();
  * GET /api/v1/leaderboard/criteria
  * Public explanation of how farmers are ranked
  */
-router.get('/criteria', (_req: Request, res: Response) => {
-  res.json({
-    success: true,
-    data: {
-      weights: FARMER_RANKING_WEIGHTS,
-      notes: 'ECX grade midpoints: Specialty 95, G1 93, G2 85, G3 75, G4 66, G5 60. Moisture limit 11.5%. New farmers start at 70 on buyer-dependent criteria.',
-    },
-  });
-});
+router.get(
+  '/criteria',
+  cacheMiddleware({ prefix: 'leaderboard_criteria', ttlSeconds: 3600 }),
+  (_req: Request, res: Response) => {
+    res.json({
+      success: true,
+      data: {
+        weights: FARMER_RANKING_WEIGHTS,
+        notes: 'ECX grade midpoints: Specialty 95, G1 93, G2 85, G3 75, G4 66, G5 60. Moisture limit 11.5%. New farmers start at 70 on buyer-dependent criteria.',
+      },
+    });
+  }
+);
 
 /**
  * GET /api/v1/leaderboard/farmers
- * Ranked by averageQualityScore desc, then totalKgSold desc
+ * Ranked by averageQualityScore desc, then totalKgSold desc (cached in Redis)
  */
-router.get('/farmers', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.get(
+  '/farmers',
+  cacheMiddleware({ prefix: 'leaderboard_farmers', ttlSeconds: 300 }),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { zone, woreda } = req.query;
     const query: any = {};
@@ -68,9 +76,12 @@ router.get('/farmers', async (req: Request, res: Response, next: NextFunction): 
 
 /**
  * GET /api/v1/leaderboard/buyers
- * Ranked by fairnessScore desc, then totalKgBought desc
+ * Ranked by fairnessScore desc, then totalKgBought desc (cached in Redis)
  */
-router.get('/buyers', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.get(
+  '/buyers',
+  cacheMiddleware({ prefix: 'leaderboard_buyers', ttlSeconds: 300 }),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { zone } = req.query;
     const query: any = { verificationStatus: 'verified' }; // Only verified buyers

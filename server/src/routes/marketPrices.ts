@@ -3,6 +3,7 @@ import { MarketPrice } from '../models/MarketPrice';
 import { authenticateJWT, AuthenticatedRequest, requireRoles } from '../middleware/authMiddleware';
 import { refreshECXPricesFromInternet } from '../services/ecxPriceService';
 import { PRICE_SOURCE_NOTE } from '../constants/coffeePrices';
+import { cacheMiddleware, invalidateCache } from '../middleware/cacheMiddleware';
 
 const router = Router();
 
@@ -22,27 +23,34 @@ const router = Router();
 
 /**
  * GET /api/v1/market-prices
- * Returns all active ECX reference benchmark prices
+ * Returns all active ECX reference benchmark prices (cached in Redis)
  */
-router.get('/', async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const prices = await MarketPrice.find().sort({ processing: 1, grade: 1 });
-    res.json({
-      success: true,
-      data: prices,
-      source: PRICE_SOURCE_NOTE,
-      lastRefreshed: new Date(),
-    });
-  } catch (err) {
-    next(err);
+router.get(
+  '/',
+  cacheMiddleware({ prefix: 'market_prices', ttlSeconds: 1800 }),
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const prices = await MarketPrice.find().sort({ processing: 1, grade: 1 });
+      res.json({
+        success: true,
+        data: prices,
+        source: PRICE_SOURCE_NOTE,
+        lastRefreshed: new Date(),
+      });
+    } catch (err) {
+      next(err);
+    }
   }
-});
+);
 
 /**
  * GET /api/v1/market-prices/history
- * Returns historical price points formatted for Recharts line charts
+ * Returns historical price points formatted for Recharts line charts (cached in Redis)
  */
-router.get('/history', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.get(
+  '/history',
+  cacheMiddleware({ prefix: 'market_prices_history', ttlSeconds: 1800 }),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { grade = 'Grade 1', processing = 'washed' } = req.query;
     const priceDoc = await MarketPrice.findOne({ grade, processing });
@@ -85,6 +93,10 @@ router.post(
           error: result.error,
         });
         return;
+      }
+
+      if (result.success) {
+        await invalidateCache(['market_prices:*', 'market_prices_history:*', 'listings:*']);
       }
 
       res.json({
@@ -134,6 +146,8 @@ router.put(
       priceDoc.updatedBy = req.user!._id;
 
       await priceDoc.save();
+
+      await invalidateCache(['market_prices:*', 'market_prices_history:*', 'listings:*']);
 
       res.json({
         success: true,

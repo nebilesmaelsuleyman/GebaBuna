@@ -4,6 +4,7 @@ import { Trade } from '../models/Trade';
 import { FarmerProfile } from '../models/FarmerProfile';
 import { BuyerProfile } from '../models/BuyerProfile';
 import { createNotification } from '../services/notificationService';
+import { invalidateCache } from '../middleware/cacheMiddleware';
 
 const router = Router();
 
@@ -146,6 +147,7 @@ router.post(
       }
 
       await trade.save();
+      await invalidateCache(['stats:*', 'leaderboard_*']);
 
       const notifyTarget = isFarmer ? trade.buyer : trade.farmer;
       await createNotification({
@@ -251,6 +253,7 @@ router.post(
       }
 
       await trade.save();
+      await invalidateCache(['stats:*', 'leaderboard_*']);
 
       res.json({
         success: true,

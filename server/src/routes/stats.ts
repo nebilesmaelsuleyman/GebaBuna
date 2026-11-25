@@ -3,6 +3,7 @@ import { User } from '../models/User';
 import { Listing } from '../models/Listing';
 import { Trade } from '../models/Trade';
 import { BuyerProfile } from '../models/BuyerProfile';
+import { cacheMiddleware } from '../middleware/cacheMiddleware';
 
 const router = Router();
 
@@ -10,9 +11,12 @@ const SETTLED_STATUSES = ['delivered', 'paid', 'completed'];
 
 /**
  * GET /api/v1/stats/public
- * Live platform numbers for the homepage, computed from the database
+ * Live platform numbers for the homepage, computed from the database (cached in Redis)
  */
-router.get('/public', async (_req: Request, res: Response, next: NextFunction) => {
+router.get(
+  '/public',
+  cacheMiddleware({ prefix: 'stats', ttlSeconds: 60 }),
+  async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const [farmers, buyers, openListings, tradeTotals, buyerFairness] = await Promise.all([
       User.countDocuments({ role: 'farmer' }),
