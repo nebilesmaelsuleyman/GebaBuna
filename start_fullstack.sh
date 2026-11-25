@@ -20,6 +20,20 @@ else
   echo "🍃 MongoDB already running on port 27017."
 fi
 
+# 2. Start Redis if not already running on port 6379
+if ! ss -tulpn 2>/dev/null | grep -q ":6379"; then
+  echo "⚡ Starting Redis on port 6379..."
+  if command -v redis-server >/dev/null 2>&1; then
+    redis-server --daemonize yes --port 6379 --unixsocket /tmp/redis.sock --unixsocketperm 777 --dir /tmp 2>/dev/null || true
+  elif [ -x "$DIR/bin/redis-server" ]; then
+    "$DIR/bin/redis-server" --daemonize yes --port 6379 --unixsocket /tmp/redis.sock --unixsocketperm 777 --dir /tmp 2>/dev/null || true
+  else
+    echo "⚠️ redis-server binary not found, backend will operate with high-speed in-memory fallback cache."
+  fi
+else
+  echo "⚡ Redis already running on port 6379."
+fi
+
 # 2. Trap for clean shutdown
 cleanup() {
   echo ""
